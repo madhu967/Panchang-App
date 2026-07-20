@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { ThemeProvider } from './src/theme/ThemeContext';
+import { ThemeProvider, useTheme } from './src/theme/ThemeContext';
 import { AppNavigator } from './src/navigation/AppNavigator';
 import { AnimatedSplashScreen } from './src/screens/AnimatedSplashScreen';
 import { useFonts } from 'expo-font';
@@ -18,9 +18,26 @@ import {
   DMSans_700Bold
 } from '@expo-google-fonts/dm-sans';
 
-export default function App() {
+const MainAppContent = () => {
   const [showSplash, setShowSplash] = useState(true);
+  const { colors, isDark } = useTheme();
 
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      {/* Navigation pre-loaded underneath */}
+      <AppNavigator />
+
+      {/* Splash Screen overlay matching active theme */}
+      {showSplash && (
+        <AnimatedSplashScreen onComplete={() => setShowSplash(false)} />
+      )}
+
+      <StatusBar style={isDark ? "light" : "dark"} />
+    </View>
+  );
+};
+
+export default function App() {
   const [fontsLoaded] = useFonts({
     PlusJakartaSans_400Regular,
     PlusJakartaSans_500Medium,
@@ -38,17 +55,7 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <ThemeProvider>
-        <View style={{ flex: 1, backgroundColor: '#000000' }}>
-          {/* Main App Navigation pre-loaded underneath */}
-          <AppNavigator />
-
-          {/* 100% Solid Opaque Splash Screen Overlay */}
-          {showSplash && (
-            <AnimatedSplashScreen onComplete={() => setShowSplash(false)} />
-          )}
-
-          <StatusBar style="light" />
-        </View>
+        <MainAppContent />
       </ThemeProvider>
     </SafeAreaProvider>
   );

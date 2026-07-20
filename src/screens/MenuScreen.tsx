@@ -4,10 +4,10 @@ import { useTheme } from '../theme/ThemeContext';
 import { Typography } from '../components/Typography';
 import { PremiumCard } from '../components/PremiumCard';
 import { AppHeader } from '../components/AppHeader';
-import { Moon, Compass, Sun, Globe, Bell, MapPin, Sparkles, ChevronRight, HelpCircle, Shield, Info, Smartphone } from 'lucide-react-native';
+import { Moon, Compass, Sun, Globe, Bell, MapPin, Sparkles, ChevronRight, HelpCircle, Shield, Info, Smartphone, Check } from 'lucide-react-native';
 
 export const MenuScreen = ({ navigation }: any) => {
-  const { colors, isDark, toggleTheme } = useTheme();
+  const { colors, isDark, toggleTheme, userOverride, setSystemDefault } = useTheme();
 
   const menuSections = [
     {
@@ -38,7 +38,6 @@ export const MenuScreen = ({ navigation }: any) => {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Header with safe top gap */}
       <AppHeader 
         title="Menu & Settings" 
         subtitle="Vedic Utilities & Preferences"
@@ -53,7 +52,7 @@ export const MenuScreen = ({ navigation }: any) => {
             </View>
             <View style={{ flex: 1, marginLeft: 16 }}>
               <Typography variant="body" weight="semibold">Dark Mode</Typography>
-              <Typography variant="caption" color="muted">Pure Black High-Contrast OLED Theme</Typography>
+              <Typography variant="caption" color="muted">High-Contrast OLED Theme</Typography>
             </View>
             <Switch
               value={isDark}
@@ -62,6 +61,21 @@ export const MenuScreen = ({ navigation }: any) => {
               thumbColor={isDark ? colors.secondary : '#f4f3f4'}
             />
           </View>
+
+          <View style={[styles.sysDivider, { backgroundColor: colors.border }]} />
+
+          <TouchableOpacity style={styles.sysRow} onPress={setSystemDefault} activeOpacity={0.7}>
+            <Smartphone color={colors.primary} size={20} />
+            <View style={{ flex: 1, marginLeft: 14 }}>
+              <Typography variant="body" weight="medium">Use System Default Theme</Typography>
+              <Typography variant="caption" color="muted">Sync automatically with device OS dark/light mode</Typography>
+            </View>
+            {userOverride === null && (
+              <View style={[styles.checkCircle, { backgroundColor: colors.primary }]}>
+                <Check color="#000000" size={14} />
+              </View>
+            )}
+          </TouchableOpacity>
         </PremiumCard>
 
         {/* Menu Sections */}
@@ -122,6 +136,22 @@ const styles = StyleSheet.create({
   },
   themeRow: {
     flexDirection: 'row',
+    alignItems: 'center',
+  },
+  sysDivider: {
+    height: 1,
+    marginVertical: 14,
+  },
+  sysRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  checkCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
     alignItems: 'center',
   },
   iconCircle: {
