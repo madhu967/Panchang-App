@@ -1,16 +1,19 @@
-import React from 'react';
-import { View, ScrollView, StyleSheet, SafeAreaView, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, ScrollView, StyleSheet, SafeAreaView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useTheme } from '../theme/ThemeContext';
 import { Typography } from '../components/Typography';
 import { PremiumCard } from '../components/PremiumCard';
 import { AppHeader } from '../components/AppHeader';
 import { MapPin, Calendar as CalendarIcon, Sun, Moon, Sparkles, AlertCircle, Clock, ChevronRight } from 'lucide-react-native';
+import { getSunriseTime, getSunsetTime } from '../services/vedAstroApi';
 
 interface PanchangScreenProps {
   navigation?: any;
   route?: {
     params?: {
       location?: string;
+      latitude?: number;
+      longitude?: number;
       date?: string;
     };
   };
@@ -20,7 +23,40 @@ export const PanchangScreen: React.FC<PanchangScreenProps> = ({ navigation, rout
   const { colors, spacing, isDark } = useTheme();
 
   const location = route?.params?.location || 'New Delhi, India';
+  const latitude = route?.params?.latitude || 28.6139;
+  const longitude = route?.params?.longitude || 77.2090;
   const date = route?.params?.date || '20 Jul 2026';
+
+  const [sunriseTime, setSunriseTime] = useState<string>('05:48 AM');
+  const [sunsetTime, setSunsetTime] = useState<string>('06:52 PM');
+  const [isLoadingSunTimes, setIsLoadingSunTimes] = useState<boolean>(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchSunTimes = async () => {
+      setIsLoadingSunTimes(true);
+      try {
+        const [sunrise, sunset] = await Promise.all([
+          getSunriseTime(date, latitude, longitude, location),
+          getSunsetTime(date, latitude, longitude, location),
+        ]);
+
+        if (isMounted) {
+          const cleanSunrise = sunrise.split(' ')[0] || sunrise;
+          const cleanSunset = sunset.split(' ')[0] || sunset;
+          setSunriseTime(cleanSunrise);
+          setSunsetTime(cleanSunset);
+        }
+      } catch (err) {
+        console.warn('Failed to fetch sun times on PanchangScreen:', err);
+      } finally {
+        if (isMounted) setIsLoadingSunTimes(false);
+      }
+    };
+
+    fetchSunTimes();
+    return () => { isMounted = false; };
+  }, [location, latitude, longitude, date]);
 
   const panchangData = [
     { title: 'Tithi', value: 'Shukla Dashami', subValue: 'Ends at 02:45 PM' },
@@ -74,7 +110,11 @@ export const PanchangScreen: React.FC<PanchangScreenProps> = ({ navigation, rout
             <View style={styles.sunBox}>
               <Sun color={colors.primary} size={24} />
               <Typography variant="caption" color="muted" style={{ marginTop: 6 }}>Sunrise</Typography>
-              <Typography variant="body" weight="bold">05:48 AM</Typography>
+              {isLoadingSunTimes ? (
+                <ActivityIndicator size="small" color={colors.primary} style={{ marginTop: 2 }} />
+              ) : (
+                <Typography variant="body" weight="bold">{sunriseTime}</Typography>
+              )}
             </View>
 
             <View style={styles.verticalDivider} />
@@ -82,7 +122,11 @@ export const PanchangScreen: React.FC<PanchangScreenProps> = ({ navigation, rout
             <View style={styles.sunBox}>
               <Moon color={colors.secondary} size={24} />
               <Typography variant="caption" color="muted" style={{ marginTop: 6 }}>Sunset</Typography>
-              <Typography variant="body" weight="bold">06:52 PM</Typography>
+              {isLoadingSunTimes ? (
+                <ActivityIndicator size="small" color={colors.primary} style={{ marginTop: 2 }} />
+              ) : (
+                <Typography variant="body" weight="bold">{sunsetTime}</Typography>
+              )}
             </View>
 
             <View style={styles.verticalDivider} />

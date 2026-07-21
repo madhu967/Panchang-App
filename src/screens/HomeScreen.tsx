@@ -1,11 +1,13 @@
-import React, { useState } from 'react';
-import { View, ScrollView, StyleSheet, SafeAreaView, TouchableOpacity, Dimensions, TextInput, Modal } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, ScrollView, StyleSheet, SafeAreaView, TouchableOpacity, Dimensions, TextInput, Modal, ActivityIndicator, FlatList } from 'react-native';
 import { useTheme } from '../theme/ThemeContext';
 import { Typography } from '../components/Typography';
 import { PremiumCard } from '../components/PremiumCard';
 import { AppHeader } from '../components/AppHeader';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Menu, Sun, Moon, Calendar as CalendarIcon, MapPin, Compass, Search, Navigation, Sparkles, Star, ChevronRight, X, ArrowRight, ShieldCheck, Home } from 'lucide-react-native';
+import { searchLocationSuggestions, LocationItem } from '../services/locationService';
+import { getSunriseTime, getSunsetTime } from '../services/vedAstroApi';
 
 const { width } = Dimensions.get('window');
 
@@ -48,17 +50,77 @@ const CAROUSEL_ITEMS = [
   },
 ];
 
-const QUICK_LOCATIONS = ['New Delhi, India', 'Mumbai, India', 'Hyderabad, India', 'Bengaluru, India', 'Chennai, India'];
+const DEFAULT_QUICK_LOCATIONS: LocationItem[] = [
+  { name: 'New Delhi, India', fullName: 'New Delhi, Delhi, India', latitude: 28.6139, longitude: 77.2090 },
+  { name: 'Mumbai, India', fullName: 'Mumbai, Maharashtra, India', latitude: 19.0760, longitude: 72.8777 },
+  { name: 'Hyderabad, India', fullName: 'Hyderabad, Telangana, India', latitude: 17.3850, longitude: 78.4867 },
+  { name: 'Bengaluru, India', fullName: 'Bengaluru, Karnataka, India', latitude: 12.9716, longitude: 77.5946 },
+  { name: 'Chennai, India', fullName: 'Chennai, Tamil Nadu, India', latitude: 13.0827, longitude: 80.2707 },
+];
 
 export const HomeScreen = ({ navigation }: any) => {
   const { colors, layout, spacing, isDark } = useTheme();
   const [activeSlide, setActiveSlide] = useState(0);
 
   const [location, setLocation] = useState('New Delhi, India');
+  const [latitude, setLatitude] = useState(28.6139);
+  const [longitude, setLongitude] = useState(77.2090);
   const [date, setDate] = useState('20 Jul 2026');
+
+  const [sunriseTime, setSunriseTime] = useState<string>('05:48 AM');
+  const [sunsetTime, setSunsetTime] = useState<string>('06:52 PM');
+  const [isLoadingSunTimes, setIsLoadingSunTimes] = useState<boolean>(false);
 
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [locationInput, setLocationInput] = useState(location);
+  const [suggestions, setSuggestions] = useState<LocationItem[]>([]);
+  const [isSearchingLocation, setIsSearchingLocation] = useState(false);
+
+  // Debounced location search effect
+  useEffect(() => {
+    if (!locationInput || locationInput.trim().length < 2) {
+      setSuggestions([]);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setIsSearchingLocation(true);
+      const results = await searchLocationSuggestions(locationInput);
+      setSuggestions(results);
+      setIsSearchingLocation(false);
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [locationInput]);
+
+  // Fetch Sunrise and Sunset times when location or date changes
+  useEffect(() => {
+    let isMounted = true;
+    const fetchSunTimes = async () => {
+      setIsLoadingSunTimes(true);
+      try {
+        const [sunrise, sunset] = await Promise.all([
+          getSunriseTime(date, latitude, longitude, location),
+          getSunsetTime(date, latitude, longitude, location),
+        ]);
+
+        if (isMounted) {
+          // Format standard VedAstro output e.g. "05:48:12 20/07/2026 +05:30" or extract time
+          const cleanSunrise = sunrise.split(' ')[0] || sunrise;
+          const cleanSunset = sunset.split(' ')[0] || sunset;
+          setSunriseTime(cleanSunrise);
+          setSunsetTime(cleanSunset);
+        }
+      } catch (err) {
+        console.warn('Failed to fetch sun times on Home:', err);
+      } finally {
+        if (isMounted) setIsLoadingSunTimes(false);
+      }
+    };
+
+    fetchSunTimes();
+    return () => { isMounted = false; };
+  }, [location, latitude, longitude, date]);
 
   const handleScroll = (event: any) => {
     const slideSize = width - 80;
@@ -70,8 +132,17 @@ export const HomeScreen = ({ navigation }: any) => {
   };
 
   const handleCalculate = () => {
-    navigation.navigate('Panchang', { location, date });
+    navigation.navigate('Panchang', { location, latitude, longitude, date });
   };
+
+  const selectLocationItem = (item: LocationItem) => {
+    setLocation(item.name);
+    setLatitude(item.latitude);
+    setLongitude(item.longitude);
+    setLocationInput(item.name);
+    setShowLocationModal(false);
+  };
+
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -102,7 +173,11 @@ export const HomeScreen = ({ navigation }: any) => {
                 </View>
                 <View style={{ marginLeft: 10 }}>
                   <Typography variant="caption" color="muted" weight="medium">Sun Rising Time</Typography>
-                  <Typography variant="body" weight="bold">05:48 AM</Typography>
+                  {isLoadingSunTimes ? (
+                    <ActivityIndicator size="small" color={colors.primary} style={{ marginTop: 2 }} />
+                  ) : (
+                    <Typography variant="body" weight="bold">{sunriseTime}</Typography>
+                  )}
                 </View>
               </View>
 
@@ -114,7 +189,11 @@ export const HomeScreen = ({ navigation }: any) => {
                 </View>
                 <View style={{ marginLeft: 10 }}>
                   <Typography variant="caption" color="muted" weight="medium">Sun Setting Time</Typography>
-                  <Typography variant="body" weight="bold">06:52 PM</Typography>
+                  {isLoadingSunTimes ? (
+                    <ActivityIndicator size="small" color={colors.primary} style={{ marginTop: 2 }} />
+                  ) : (
+                    <Typography variant="body" weight="bold">{sunsetTime}</Typography>
+                  )}
                 </View>
               </View>
             </View>
@@ -293,12 +372,12 @@ export const HomeScreen = ({ navigation }: any) => {
           </LinearGradient>
         </PremiumCard>
 
-        {/* Location Selector Modal */}
+        {/* Location Selector Modal with Autocomplete Suggestions */}
         <Modal visible={showLocationModal} transparent animationType="slide">
           <View style={styles.modalOverlay}>
             <View style={[styles.modalContent, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 }]}>
               <View style={styles.modalHeader}>
-                <Typography variant="subtitle" weight="bold">Select Location</Typography>
+                <Typography variant="subtitle" weight="bold">Search Any City / Location</Typography>
                 <TouchableOpacity onPress={() => setShowLocationModal(false)}>
                   <X color={colors.text} size={24} />
                 </TouchableOpacity>
@@ -309,42 +388,44 @@ export const HomeScreen = ({ navigation }: any) => {
                 <TextInput
                   value={locationInput}
                   onChangeText={setLocationInput}
-                  placeholder="Type city or location..."
+                  placeholder="Search city (e.g. London, Tokyo, Hyderabad)..."
                   placeholderTextColor={colors.textSecondary}
                   style={[styles.modalInput, { color: colors.text }]}
+                  autoFocus
                 />
+                {isSearchingLocation && (
+                  <ActivityIndicator size="small" color={colors.primary} style={{ marginLeft: 8 }} />
+                )}
+                {locationInput.length > 0 && !isSearchingLocation && (
+                  <TouchableOpacity onPress={() => { setLocationInput(''); setSuggestions([]); }}>
+                    <X color={colors.textSecondary} size={16} />
+                  </TouchableOpacity>
+                )}
               </View>
 
               <Typography variant="caption" color="muted" weight="bold" style={{ marginTop: 16, marginBottom: 8 }}>
-                Quick Suggestions
+                {suggestions.length > 0 ? 'Search Results' : 'Quick Suggestions'}
               </Typography>
 
-              {QUICK_LOCATIONS.map((loc, idx) => (
-                <TouchableOpacity
-                  key={idx}
-                  style={[styles.quickLocItem, { borderBottomColor: colors.border }]}
-                  onPress={() => {
-                    setLocation(loc);
-                    setLocationInput(loc);
-                    setShowLocationModal(false);
-                  }}
-                >
-                  <MapPin color={colors.primary} size={16} />
-                  <Typography variant="body" weight="medium" style={{ marginLeft: 12 }}>{loc}</Typography>
-                </TouchableOpacity>
-              ))}
-
-              <TouchableOpacity
-                style={[styles.modalApplyBtn, { backgroundColor: colors.primary }]}
-                onPress={() => {
-                  if (locationInput.trim()) setLocation(locationInput);
-                  setShowLocationModal(false);
-                }}
-              >
-                <Typography variant="body" weight="bold" style={{ color: '#000000' }}>
-                  Save Location
-                </Typography>
-              </TouchableOpacity>
+              <ScrollView style={{ maxHeight: 280 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+                {(suggestions.length > 0 ? suggestions : DEFAULT_QUICK_LOCATIONS).map((item, idx) => (
+                  <TouchableOpacity
+                    key={idx}
+                    style={[styles.quickLocItem, { borderBottomColor: colors.border }]}
+                    onPress={() => selectLocationItem(item)}
+                  >
+                    <MapPin color={colors.primary} size={18} style={{ marginTop: 2 }} />
+                    <View style={{ marginLeft: 12, flex: 1 }}>
+                      <Typography variant="body" weight="bold">{item.name}</Typography>
+                      {item.fullName ? (
+                        <Typography variant="caption" color="muted" numberOfLines={1}>
+                          {item.fullName}
+                        </Typography>
+                      ) : null}
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
             </View>
           </View>
         </Modal>
