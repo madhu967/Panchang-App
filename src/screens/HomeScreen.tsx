@@ -4,6 +4,7 @@ import { useTheme } from '../theme/ThemeContext';
 import { Typography } from '../components/Typography';
 import { PremiumCard } from '../components/PremiumCard';
 import { AppHeader } from '../components/AppHeader';
+import { AnimatedVedicFooter } from '../components/AnimatedVedicFooter';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Menu, Sun, Moon, Calendar as CalendarIcon, MapPin, Compass, Search, Navigation, Sparkles, Star, ChevronRight, X, ArrowRight, ShieldCheck, Home } from 'lucide-react-native';
 import { searchLocationSuggestions, LocationItem } from '../services/locationService';
@@ -298,12 +299,16 @@ export const HomeScreen = ({ navigation }: any) => {
             </View>
           </View>
 
-          <TouchableOpacity style={styles.calculateBtn} onPress={handleCalculate} activeOpacity={0.8}>
-            <LinearGradient colors={['#D4AF37', '#FF9933']} style={styles.calculateGradient}>
-              <Typography variant="body" weight="bold" style={{ color: '#FFFFFF' }}>
+          <TouchableOpacity 
+            style={[styles.calculateBtn, { backgroundColor: colors.primary }]} 
+            onPress={handleCalculate} 
+            activeOpacity={0.8}
+          >
+            <View style={styles.calculateGradient}>
+              <Typography variant="body" weight="semibold" style={{ color: '#FFFFFF' }}>
                 Calculate Panchang
               </Typography>
-            </LinearGradient>
+            </View>
           </TouchableOpacity>
         </PremiumCard>
 
@@ -336,41 +341,10 @@ export const HomeScreen = ({ navigation }: any) => {
           ))}
         </ScrollView>
 
-        {/* Sleek Vastu Shastra Footer Card */}
-        <PremiumCard style={styles.vastuFooterCard} noPadding>
-          <LinearGradient 
-            colors={isDark ? ['#1E1C12', '#0A0A0A'] : ['#D4AF37', '#F5E6B3']} 
-            start={{ x: 0, y: 0 }} 
-            end={{ x: 0, y: 1 }} 
-            style={styles.vastuGradient}
-          >
-            <View style={styles.vastuContentRow}>
-              <View style={styles.compassIconCircle}>
-                <Compass color={isDark ? '#D4AF37' : '#000000'} size={26} />
-              </View>
-
-              <View style={{ flex: 1, marginLeft: 14, marginRight: 10 }}>
-                <Typography variant="subtitle" weight="bold" style={{ color: isDark ? '#FFFFFF' : '#000000', fontSize: 16 }}>
-                  Explore Vastu Shastra
-                </Typography>
-                <Typography variant="caption" style={{ color: isDark ? 'rgba(255,255,255,0.75)' : 'rgba(0,0,0,0.8)', marginTop: 3, fontSize: 12, lineHeight: 16 }}>
-                  Align home directions with authentic Vedic energy.
-                </Typography>
-              </View>
-
-              <TouchableOpacity 
-                style={styles.vastuCtaBtn}
-                onPress={() => navigation.navigate('Menu')}
-                activeOpacity={0.8}
-              >
-                <Typography variant="caption" weight="bold" style={{ color: '#FFFFFF', fontSize: 13 }}>
-                  Explore
-                </Typography>
-                <ArrowRight color="#FFFFFF" size={15} style={{ marginLeft: 5 }} />
-              </TouchableOpacity>
-            </View>
-          </LinearGradient>
-        </PremiumCard>
+        {/* Premium Animated Vedic Panchang Brand Footer Section */}
+        <View style={styles.animatedFooterContainer}>
+          <AnimatedVedicFooter />
+        </View>
 
         {/* Location Selector Modal with Autocomplete Suggestions */}
         <Modal visible={showLocationModal} transparent animationType="slide">
@@ -553,33 +527,11 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     marginRight: 10,
   },
-  vastuFooterCard: {
+  animatedFooterContainer: {
+    marginTop: 10,
     marginBottom: 20,
-  },
-  vastuGradient: {
-    padding: 18,
-  },
-  vastuContentRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  compassIconCircle: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: 'rgba(0, 0, 0, 0.12)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  vastuCtaBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#000000',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 18,
+    borderRadius: 28,
+    overflow: 'hidden',
   },
   modalOverlay: {
     flex: 1,

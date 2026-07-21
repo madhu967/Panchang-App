@@ -21,13 +21,17 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   const insets = useSafeAreaInsets();
   const { colors, isDark, toggleTheme } = useTheme();
 
+  const textColor = colors.onPrimary || (isDark ? '#FFFFFF' : '#000000');
+  const subTextColor = colors.onPrimary === '#FFFFFF' ? 'rgba(255, 255, 255, 0.85)' : 'rgba(0, 0, 0, 0.75)';
+  const iconBgColor = colors.onPrimary === '#FFFFFF' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.12)';
+
   return (
     <View 
       style={[
         styles.headerContainer,
         {
           paddingTop: Math.max(insets.top, 16) + 10,
-          backgroundColor: colors.primary, // Always primary color (Gold) in both light and dark mode as requested
+          backgroundColor: colors.primary,
           borderBottomColor: 'rgba(0, 0, 0, 0.1)',
         }
       ]}
@@ -36,14 +40,14 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
         <View style={styles.titleContainer}>
           <Typography 
             variant="display" 
-            style={styles.titleText}
+            style={[styles.titleText, { color: textColor }]}
           >
             {title}
           </Typography>
           {subtitle && (
             <Typography 
               variant="caption" 
-              style={styles.subtitleText}
+              style={[styles.subtitleText, { color: subTextColor }]}
             >
               {subtitle}
             </Typography>
@@ -53,25 +57,25 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
         <View style={styles.actionRow}>
           {showThemeToggle && (
             <TouchableOpacity 
-              style={styles.iconButton} 
+              style={[styles.iconButton, { backgroundColor: iconBgColor }]} 
               onPress={toggleTheme}
               activeOpacity={0.7}
             >
               {isDark ? (
-                <Moon color="#000000" size={20} />
+                <Moon color={textColor} size={20} />
               ) : (
-                <Sun color="#000000" size={20} />
+                <Sun color={textColor} size={20} />
               )}
             </TouchableOpacity>
           )}
 
           {onMenuPress && (
             <TouchableOpacity 
-              style={[styles.iconButton, { marginLeft: 10 }]} 
+              style={[styles.iconButton, { marginLeft: 10, backgroundColor: iconBgColor }]} 
               onPress={onMenuPress}
               activeOpacity={0.7}
             >
-              <Menu color="#000000" size={20} />
+              <Menu color={textColor} size={20} />
             </TouchableOpacity>
           )}
         </View>

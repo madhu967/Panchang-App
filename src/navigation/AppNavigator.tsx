@@ -33,7 +33,7 @@ const TabNavigator = () => {
           borderRadius: 28,
           height: 68,
           borderTopWidth: 0,
-          borderColor: isDark ? 'rgba(212, 175, 55, 0.3)' : 'rgba(212, 175, 55, 0.2)',
+          borderColor: colors.primary + '40',
           borderWidth: 1,
           shadowColor: '#000',
           shadowOffset: { width: 0, height: 10 },
@@ -64,7 +64,7 @@ const TabNavigator = () => {
         options={{
           tabBarLabel: 'Home',
           tabBarIcon: ({ color, focused }) => (
-            <View style={[styles.iconWrapper, focused && { backgroundColor: isDark ? 'rgba(212, 175, 55, 0.15)' : 'rgba(212, 175, 55, 0.12)' }]}>
+            <View style={[styles.iconWrapper, focused && { backgroundColor: colors.primary + '26' }]}>
               <Home color={color} size={22} />
             </View>
           )
@@ -76,7 +76,7 @@ const TabNavigator = () => {
         options={{
           tabBarLabel: 'Panchangam',
           tabBarIcon: ({ color, focused }) => (
-            <View style={[styles.iconWrapper, focused && { backgroundColor: isDark ? 'rgba(212, 175, 55, 0.15)' : 'rgba(212, 175, 55, 0.12)' }]}>
+            <View style={[styles.iconWrapper, focused && { backgroundColor: colors.primary + '26' }]}>
               <Moon color={color} size={22} />
             </View>
           )
@@ -88,7 +88,7 @@ const TabNavigator = () => {
         options={{
           tabBarLabel: 'Calendar',
           tabBarIcon: ({ color, focused }) => (
-            <View style={[styles.iconWrapper, focused && { backgroundColor: isDark ? 'rgba(212, 175, 55, 0.15)' : 'rgba(212, 175, 55, 0.12)' }]}>
+            <View style={[styles.iconWrapper, focused && { backgroundColor: colors.primary + '26' }]}>
               <CalendarIcon color={color} size={22} />
             </View>
           )
@@ -100,7 +100,7 @@ const TabNavigator = () => {
         options={{
           tabBarLabel: 'Festivals',
           tabBarIcon: ({ color, focused }) => (
-            <View style={[styles.iconWrapper, focused && { backgroundColor: isDark ? 'rgba(212, 175, 55, 0.15)' : 'rgba(212, 175, 55, 0.12)' }]}>
+            <View style={[styles.iconWrapper, focused && { backgroundColor: colors.primary + '26' }]}>
               <Flame color={color} size={22} />
             </View>
           )
@@ -112,7 +112,7 @@ const TabNavigator = () => {
         options={{
           tabBarLabel: 'Menu',
           tabBarIcon: ({ color, focused }) => (
-            <View style={[styles.iconWrapper, focused && { backgroundColor: isDark ? 'rgba(212, 175, 55, 0.15)' : 'rgba(212, 175, 55, 0.12)' }]}>
+            <View style={[styles.iconWrapper, focused && { backgroundColor: colors.primary + '26' }]}>
               <Menu color={color} size={22} />
             </View>
           )

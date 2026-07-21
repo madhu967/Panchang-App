@@ -1,28 +1,30 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useColorScheme, Appearance } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { colors, ThemeColors } from './colors';
+import { colors, ThemeColors, ThemeMode } from './colors';
 import { typography } from './typography';
 import { spacing, layout } from './spacing';
 
 const THEME_STORAGE_KEY = '@user_theme_preference';
 
 type Theme = {
+  themeMode: ThemeMode;
   isDark: boolean;
-  userOverride: 'dark' | 'light' | null;
+  userOverride: ThemeMode | null;
   colors: ThemeColors;
   typography: typeof typography;
   spacing: typeof spacing;
   layout: typeof layout;
   toggleTheme: () => void;
+  setThemeMode: (mode: ThemeMode) => void;
   setSystemDefault: () => void;
 };
 
-const getInitialOverride = (): 'dark' | 'light' | null => {
+const getInitialOverride = (): ThemeMode | null => {
   try {
     if (typeof window !== 'undefined' && window.localStorage) {
-      const syncVal = window.localStorage.getItem(THEME_STORAGE_KEY);
-      if (syncVal === 'dark' || syncVal === 'light') {
+      const syncVal = window.localStorage.getItem(THEME_STORAGE_KEY) as ThemeMode;
+      if (syncVal && colors[syncVal]) {
         return syncVal;
       }
     }
@@ -31,6 +33,7 @@ const getInitialOverride = (): 'dark' | 'light' | null => {
 };
 
 const defaultTheme: Theme = {
+  themeMode: 'dark',
   isDark: true,
   userOverride: null,
   colors: colors.dark,
@@ -38,6 +41,7 @@ const defaultTheme: Theme = {
   spacing,
   layout,
   toggleTheme: () => {},
+  setThemeMode: () => {},
   setSystemDefault: () => {},
 };
 
@@ -45,15 +49,15 @@ const ThemeContext = createContext<Theme>(defaultTheme);
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const systemColorScheme = useColorScheme();
-  const [userOverride, setUserOverride] = useState<'dark' | 'light' | null>(getInitialOverride);
+  const [userOverride, setUserOverride] = useState<ThemeMode | null>(getInitialOverride);
 
   // Hydrate from AsyncStorage on native boot
   useEffect(() => {
     let isMounted = true;
     const loadStoredPreference = async () => {
       try {
-        const stored = await AsyncStorage.getItem(THEME_STORAGE_KEY);
-        if (isMounted && (stored === 'dark' || stored === 'light')) {
+        const stored = (await AsyncStorage.getItem(THEME_STORAGE_KEY)) as ThemeMode;
+        if (isMounted && stored && colors[stored]) {
           setUserOverride(stored);
         }
       } catch (e) {}
@@ -61,28 +65,34 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     loadStoredPreference();
   }, []);
 
-  // Compute final isDark state:
-  // 1. If user explicitly chose 'dark' or 'light', use userOverride.
-  // 2. Otherwise, strictly follow system OS color scheme (systemColorScheme === 'dark' or Appearance === 'dark').
-  const isDark = userOverride 
-    ? (userOverride === 'dark')
-    : (systemColorScheme === 'dark' || Appearance.getColorScheme() === 'dark');
+  // Compute active themeMode
+  const themeMode: ThemeMode = userOverride 
+    ? userOverride
+    : ((systemColorScheme === 'dark' || Appearance.getColorScheme() === 'dark') ? 'dark' : 'light');
 
-  const toggleTheme = async () => {
-    const nextMode: 'dark' | 'light' = isDark ? 'light' : 'dark';
-    setUserOverride(nextMode);
+  const isDark = themeMode === 'dark';
+
+  const setThemeMode = async (mode: ThemeMode) => {
+    setUserOverride(mode);
 
     try {
       if (typeof window !== 'undefined' && window.localStorage) {
-        window.localStorage.setItem(THEME_STORAGE_KEY, nextMode);
+        window.localStorage.setItem(THEME_STORAGE_KEY, mode);
       }
     } catch (e) {}
 
     try {
-      await AsyncStorage.setItem(THEME_STORAGE_KEY, nextMode);
+      await AsyncStorage.setItem(THEME_STORAGE_KEY, mode);
     } catch (e) {
       console.warn('Failed to save theme preference:', e);
     }
+  };
+
+  const toggleTheme = () => {
+    const modes: ThemeMode[] = ['light', 'dark', 'crimsonLight'];
+    const currentIndex = modes.indexOf(themeMode);
+    const nextMode = modes[(currentIndex + 1) % modes.length];
+    setThemeMode(nextMode);
   };
 
   const setSystemDefault = async () => {
@@ -102,13 +112,15 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const theme: Theme = {
+    themeMode,
     isDark,
     userOverride,
-    colors: isDark ? colors.dark : colors.light,
+    colors: colors[themeMode] || colors.dark,
     typography,
     spacing,
     layout,
     toggleTheme,
+    setThemeMode,
     setSystemDefault,
   };
 
@@ -120,3 +132,6 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 };
 
 export const useTheme = () => useContext(ThemeContext);
+
+
+

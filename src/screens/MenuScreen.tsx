@@ -7,7 +7,13 @@ import { AppHeader } from '../components/AppHeader';
 import { Moon, Compass, Sun, Globe, Bell, MapPin, Sparkles, ChevronRight, HelpCircle, Shield, Info, Smartphone, Check } from 'lucide-react-native';
 
 export const MenuScreen = ({ navigation }: any) => {
-  const { colors, isDark, toggleTheme, userOverride, setSystemDefault } = useTheme();
+  const { colors, isDark, themeMode, setThemeMode, userOverride, setSystemDefault } = useTheme();
+
+  const themeOptions: { id: 'light' | 'dark' | 'crimsonLight'; name: string; desc: string; primaryColor: string }[] = [
+    { id: 'light', name: 'Gold Light', desc: 'Classic Gold Light Theme', primaryColor: '#D4AF37' },
+    { id: 'dark', name: 'Gold Dark', desc: 'High-Contrast OLED Dark Theme', primaryColor: '#D4AF37' },
+    { id: 'crimsonLight', name: 'Crimson Gold Light', desc: 'Royal Crimson Red + Gold Light', primaryColor: '#7A1124' },
+  ];
 
   const menuSections = [
     {
@@ -44,22 +50,42 @@ export const MenuScreen = ({ navigation }: any) => {
       />
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Dark Mode Toggle Card */}
+        {/* Theme Selection Card */}
         <PremiumCard style={styles.themeCard}>
-          <View style={styles.themeRow}>
-            <View style={styles.iconCircle}>
-              <Moon color={colors.primary} size={22} />
-            </View>
-            <View style={{ flex: 1, marginLeft: 16 }}>
-              <Typography variant="body" weight="semibold">Dark Mode</Typography>
-              <Typography variant="caption" color="muted">High-Contrast OLED Theme</Typography>
-            </View>
-            <Switch
-              value={isDark}
-              onValueChange={toggleTheme}
-              trackColor={{ false: '#767577', true: colors.primary }}
-              thumbColor={isDark ? colors.secondary : '#f4f3f4'}
-            />
+          <Typography variant="body" weight="semibold" style={{ marginBottom: 4 }}>
+            App Theme & Color Palette
+          </Typography>
+          <Typography variant="caption" color="muted" style={{ marginBottom: 14 }}>
+            Select your preferred primary color theme
+          </Typography>
+
+          <View style={styles.themeGrid}>
+            {themeOptions.map((t) => {
+              const isActive = themeMode === t.id && userOverride !== null;
+              return (
+                <TouchableOpacity
+                  key={t.id}
+                  style={[
+                    styles.themeChip,
+                    { borderColor: isActive ? colors.primary : colors.border },
+                    isActive && { backgroundColor: colors.primary + '18' }
+                  ]}
+                  onPress={() => setThemeMode(t.id)}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.colorDot, { backgroundColor: t.primaryColor }]} />
+                  <View style={{ flex: 1, marginLeft: 10 }}>
+                    <Typography variant="caption" weight={isActive ? "bold" : "semibold"}>
+                      {t.name}
+                    </Typography>
+                    <Typography variant="caption" color="muted" style={{ fontSize: 10 }}>
+                      {t.desc}
+                    </Typography>
+                  </View>
+                  {isActive && <Check color={colors.primary} size={16} />}
+                </TouchableOpacity>
+              );
+            })}
           </View>
 
           <View style={[styles.sysDivider, { backgroundColor: colors.border }]} />
@@ -72,7 +98,7 @@ export const MenuScreen = ({ navigation }: any) => {
             </View>
             {userOverride === null && (
               <View style={[styles.checkCircle, { backgroundColor: colors.primary }]}>
-                <Check color="#000000" size={14} />
+                <Check color={colors.onPrimary || "#000000"} size={14} />
               </View>
             )}
           </TouchableOpacity>
@@ -134,9 +160,22 @@ const styles = StyleSheet.create({
   themeCard: {
     marginBottom: 28,
   },
-  themeRow: {
+  themeGrid: {
+    gap: 10,
+    marginBottom: 6,
+  },
+  themeChip: {
     flexDirection: 'row',
     alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    borderWidth: 1.5,
+  },
+  colorDot: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
   },
   sysDivider: {
     height: 1,
