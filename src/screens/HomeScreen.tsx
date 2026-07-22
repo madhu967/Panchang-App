@@ -5,8 +5,9 @@ import { Typography } from '../components/Typography';
 import { PremiumCard } from '../components/PremiumCard';
 import { AppHeader } from '../components/AppHeader';
 import { AnimatedVedicFooter } from '../components/AnimatedVedicFooter';
+import { HomeCarouselCard } from '../components/HomeCarouselCard';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Menu, Sun, Moon, Calendar as CalendarIcon, MapPin, Compass, Search, Navigation, Sparkles, Star, ChevronRight, X, ArrowRight, ShieldCheck, Home } from 'lucide-react-native';
+import { Menu, Sun, Moon, Calendar as CalendarIcon, MapPin, Compass, Search, Navigation, Sparkles, Star, ChevronRight, X, ArrowRight, ShieldCheck, Home, Heart } from 'lucide-react-native';
 import { searchLocationSuggestions, LocationItem } from '../services/locationService';
 import { getSunriseTime, getSunsetTime } from '../services/vedAstroApi';
 
@@ -17,37 +18,45 @@ const CAROUSEL_ITEMS = [
     id: '1',
     title: "Today's Panchang",
     subtitle: 'Shukla Dashami • Vishakha Nakshatra',
-    tag: 'Auspicious Day',
-    gradient: ['#FF9933', '#D4AF37'],
+    tag: 'Auspicious Almanac',
+    gradient: ['#7A1124', '#D4AF37', '#FF9933'],
+    accentColor: '#FFD700',
     icon: Sun,
     navTarget: 'Panchang',
+    ctaText: 'View Panchang',
   },
   {
     id: '2',
     title: 'Upcoming Festivals',
-    subtitle: 'Devshayani Ekadashi in 4 Days',
-    tag: 'Fast & Puja',
-    gradient: ['#8A2BE2', '#4B0082'],
+    subtitle: 'Devshayani Ekadashi • In 4 Days',
+    tag: 'Holy Fast & Puja',
+    gradient: ['#2E0854', '#6B21A8', '#A855F7'],
+    accentColor: '#C084FC',
     icon: Moon,
     navTarget: 'Festivals',
+    ctaText: 'Explore Festivals',
   },
   {
     id: '3',
     title: 'Good Muhurtham Today',
     subtitle: 'Abhijit Muhurat: 11:54 AM - 12:48 PM',
-    tag: 'Best Timing',
-    gradient: ['#00B0FF', '#00E676'],
+    tag: 'Best Divine Timing',
+    gradient: ['#064E3B', '#047857', '#10B981'],
+    accentColor: '#34D399',
     icon: Sparkles,
     navTarget: 'Panchang',
+    ctaText: 'Check Timings',
   },
   {
     id: '4',
     title: 'Daily Rashiphal',
     subtitle: 'Moon in Libra • High Spiritual Energy',
-    tag: 'Horoscope',
-    gradient: ['#FF5252', '#FF7A00'],
+    tag: 'Vedic Predictions',
+    gradient: ['#881337', '#E11D48', '#FB923C'],
+    accentColor: '#FDBA74',
     icon: Star,
     navTarget: 'Menu',
+    ctaText: 'Read Rashiphal',
   },
 ];
 
@@ -225,38 +234,14 @@ export const HomeScreen = ({ navigation }: any) => {
             scrollEventThrottle={16}
             style={styles.carouselContainer}
           >
-            {CAROUSEL_ITEMS.map((item) => {
-              const IconComp = item.icon;
-              return (
-                <TouchableOpacity
-                  key={item.id}
-                  activeOpacity={0.9}
-                  onPress={() => navigation.navigate(item.navTarget)}
-                >
-                  <PremiumCard style={[styles.carouselCard, { width: width - 80, marginRight: 16 }]} noPadding>
-                    <LinearGradient colors={item.gradient as any} style={styles.carouselGradient}>
-                      <View style={styles.carouselHeader}>
-                        <View style={styles.carouselTag}>
-                          <Typography variant="caption" weight="bold" style={{ color: '#FFF', fontSize: 10 }}>
-                            {item.tag}
-                          </Typography>
-                        </View>
-                        <IconComp color="#FFF" size={24} />
-                      </View>
-
-                      <View style={{ marginTop: 'auto' }}>
-                        <Typography variant="title" style={{ color: '#FFF', fontSize: 20 }}>
-                          {item.title}
-                        </Typography>
-                        <Typography variant="caption" style={{ color: 'rgba(255,255,255,0.95)', marginTop: 4, fontWeight: '500' }}>
-                          {item.subtitle}
-                        </Typography>
-                      </View>
-                    </LinearGradient>
-                  </PremiumCard>
-                </TouchableOpacity>
-              );
-            })}
+            {CAROUSEL_ITEMS.map((item) => (
+              <HomeCarouselCard
+                key={item.id}
+                item={item as any}
+                cardWidth={width - 80}
+                onPress={() => navigation.navigate(item.navTarget)}
+              />
+            ))}
           </ScrollView>
 
           {/* Pagination Indicators */}
@@ -315,30 +300,34 @@ export const HomeScreen = ({ navigation }: any) => {
         {/* Quick Feature Chips */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.shortcutsContainer}>
           {[
-            { label: 'Panchang', target: 'Panchang' },
-            { label: 'Calendar', target: 'Calendar' },
-            { label: 'Festivals', target: 'Festivals' },
-            { label: 'Menu', target: 'Menu' },
-          ].map((item, idx) => (
-            <TouchableOpacity 
-              key={idx} 
-              onPress={() => navigation.navigate(item.target)}
-              activeOpacity={0.7}
-              style={[
-                styles.chip, 
-                { 
-                  backgroundColor: isDark ? '#1E1E26' : colors.surface,
-                  borderColor: colors.border,
-                  borderWidth: 1,
-                }
-              ]}
-            >
-              <Compass color={colors.primary} size={16} />
-              <Typography variant="caption" weight="bold" style={{ marginLeft: 8, color: colors.text }}>
-                {item.label}
-              </Typography>
-            </TouchableOpacity>
-          ))}
+            { label: 'Horoscope', target: 'Horoscope', icon: Sparkles },
+            { label: 'Match Checker', target: 'MatchChecker', icon: Heart },
+            { label: 'Panchang', target: 'Panchang', icon: Compass },
+            { label: 'Calendar', target: 'Calendar', icon: CalendarIcon },
+            { label: 'Festivals', target: 'Festivals', icon: Sun },
+          ].map((item, idx) => {
+            const ChipIcon = item.icon || Compass;
+            return (
+              <TouchableOpacity 
+                key={idx} 
+                onPress={() => navigation.navigate(item.target)}
+                activeOpacity={0.7}
+                style={[
+                  styles.chip, 
+                  { 
+                    backgroundColor: isDark ? '#1E1E26' : colors.surface,
+                    borderColor: colors.border,
+                    borderWidth: 1,
+                  }
+                ]}
+              >
+                <ChipIcon color={colors.primary} size={16} />
+                <Typography variant="caption" weight="bold" style={{ marginLeft: 8, color: colors.text }}>
+                  {item.label}
+                </Typography>
+              </TouchableOpacity>
+            );
+          })}
         </ScrollView>
 
         {/* Premium Animated Vedic Panchang Brand Footer Section */}

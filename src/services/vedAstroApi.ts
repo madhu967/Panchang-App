@@ -146,3 +146,52 @@ export const getSunsetTime = async (
     throw error;
   }
 };
+
+export interface MatchReportRequest {
+  MaleBirthTime: VedAstroTime;
+  FemaleBirthTime: VedAstroTime;
+  Ayanamsa: string;
+}
+
+/**
+ * Call the VedAstro MatchReport API
+ */
+export const getMatchReport = async (payload: MatchReportRequest): Promise<any> => {
+  try {
+    const response = await axios.post(`${VEDASTRO_BASE_URL}/MatchReport`, payload, {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      timeout: 20000,
+    });
+    return response.data;
+  } catch (error: any) {
+    console.error('VedAstro getMatchReport Error:', error?.response?.data || error.message || error);
+    throw error;
+  }
+};
+
+export interface HoroscopePredictionsRequest {
+  BirthTime: VedAstroTime;
+  FilterTags: string;
+  SortByWeight: string;
+  Ayanamsa: string;
+}
+
+/**
+ * Call the VedAstro HoroscopePredictions API
+ */
+export const getHoroscopePredictions = async (payload: HoroscopePredictionsRequest): Promise<any> => {
+  try {
+    const response = await axios.post(`${VEDASTRO_BASE_URL}/HoroscopePredictions`, payload, {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      timeout: 25000,
+    });
+    return response.data;
+  } catch (error: any) {
+    console.error('VedAstro getHoroscopePredictions Error:', error?.response?.data || error.message || error);
+    throw error;
+  }
+};

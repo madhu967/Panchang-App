@@ -4,7 +4,7 @@ import { useTheme } from '../theme/ThemeContext';
 import { Typography } from '../components/Typography';
 import { PremiumCard } from '../components/PremiumCard';
 import { AppHeader } from '../components/AppHeader';
-import { Moon, Compass, Sun, Globe, Bell, MapPin, Sparkles, ChevronRight, HelpCircle, Shield, Info, Smartphone, Check } from 'lucide-react-native';
+import { Moon, Compass, Sun, Globe, Bell, MapPin, Sparkles, ChevronRight, HelpCircle, Shield, Info, Smartphone, Check, Heart } from 'lucide-react-native';
 
 export const MenuScreen = ({ navigation }: any) => {
   const { colors, isDark, themeMode, setThemeMode, userOverride, setSystemDefault } = useTheme();
@@ -19,8 +19,11 @@ export const MenuScreen = ({ navigation }: any) => {
     {
       title: 'Panchang & Astrology Utilities',
       items: [
+        { icon: Heart, label: 'Kundali Match Checker', sub: 'Vedic compatibility score & details', route: 'MatchChecker' },
+        { icon: Sparkles, label: 'Daily Horoscope', sub: 'Western daily, weekly & monthly predictions', route: 'DailyHoroscope' },
+        { icon: Sparkles, label: 'Horoscope Predictions', sub: 'Personalised Vedic life interpretations', route: 'Horoscope' },
+        { icon: Compass, label: 'Vedic Numerology Analysis', sub: 'Calculates Name & Destiny numbers', route: 'Numerology' },
         { icon: Compass, label: 'Vastu Compass & Energy', sub: 'Harmonize your home directional energy' },
-        { icon: Sparkles, label: 'Janma Kundali & Horoscope', sub: 'Vedic planetary chart & daily predictions' },
         { icon: Sun, label: 'Choghadiya & Hora Timings', sub: 'Day & night auspicious Muhurthas' },
       ]
     },
@@ -112,7 +115,7 @@ export const MenuScreen = ({ navigation }: any) => {
             </Typography>
 
             <PremiumCard style={styles.sectionCard} noPadding>
-              {section.items.map((item, iIdx) => {
+              {section.items.map((item: any, iIdx) => {
                 const ItemIcon = item.icon;
                 const isLast = iIdx === section.items.length - 1;
                 return (
@@ -122,6 +125,8 @@ export const MenuScreen = ({ navigation }: any) => {
                       styles.menuItem,
                       !isLast && { borderBottomWidth: 1, borderBottomColor: isDark ? '#1E1E26' : '#F0EAD6' }
                     ]}
+                    onPress={() => item.route && navigation.navigate(item.route)}
+                    activeOpacity={0.7}
                   >
                     <View style={styles.itemLeft}>
                       <ItemIcon color={colors.primary} size={20} />

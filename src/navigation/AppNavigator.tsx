@@ -1,17 +1,22 @@
+// Trigger Metro reload to resolve new screen files
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { View, StyleSheet, Platform, Text } from 'react-native';
 import { BlurView } from 'expo-blur';
-import { Home, Moon, Calendar as CalendarIcon, Flame, Menu } from 'lucide-react-native';
+import { Home, Moon, Calendar as CalendarIcon, Flame, Menu, Heart, Sparkles } from 'lucide-react-native';
 
 import { useTheme } from '../theme/ThemeContext';
 import { HomeScreen } from '../screens/HomeScreen';
 import { PanchangScreen } from '../screens/PanchangScreen';
+import { MatchCheckerScreen } from '../screens/MatchCheckerScreen';
+import { HoroscopePredictionsScreen } from '../screens/HoroscopePredictionsScreen';
 import { CalendarScreen } from '../screens/CalendarScreen';
 import { FestivalsScreen } from '../screens/FestivalsScreen';
 import { MenuScreen } from '../screens/MenuScreen';
+import { DailyHoroscopeScreen } from '../screens/DailyHoroscopeScreen';
+import { NumerologyScreen } from '../screens/NumerologyScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -83,6 +88,30 @@ const TabNavigator = () => {
         }}
       />
       <Tab.Screen 
+        name="MatchChecker" 
+        component={MatchCheckerScreen} 
+        options={{
+          tabBarLabel: 'Match',
+          tabBarIcon: ({ color, focused }) => (
+            <View style={[styles.iconWrapper, focused && { backgroundColor: colors.primary + '26' }]}>
+              <Heart color={color} size={22} />
+            </View>
+          )
+        }}
+      />
+      <Tab.Screen 
+        name="Horoscope" 
+        component={HoroscopePredictionsScreen} 
+        options={{
+          tabBarLabel: 'Horoscope',
+          tabBarIcon: ({ color, focused }) => (
+            <View style={[styles.iconWrapper, focused && { backgroundColor: colors.primary + '26' }]}>
+              <Sparkles color={color} size={22} />
+            </View>
+          )
+        }}
+      />
+      <Tab.Screen 
         name="Calendar" 
         component={CalendarScreen} 
         options={{
@@ -127,6 +156,8 @@ export const AppNavigator = () => {
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen name="Main" component={TabNavigator} />
+        <Stack.Screen name="DailyHoroscope" component={DailyHoroscopeScreen} />
+        <Stack.Screen name="Numerology" component={NumerologyScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );
