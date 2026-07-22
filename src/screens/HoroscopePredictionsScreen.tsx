@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   View, 
   ScrollView, 
@@ -496,7 +496,7 @@ export const HoroscopePredictionsScreen = ({ navigation }: any) => {
   };
 
   // Processed horoscope predictions list
-  const processedHoroscopeList = useMemo(() => {
+  const processedHoroscopeList = React.useMemo(() => {
     if (!horoscopeData) return [];
 
     let list = [...horoscopeData];

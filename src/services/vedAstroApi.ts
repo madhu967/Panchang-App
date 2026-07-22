@@ -195,3 +195,97 @@ export const getHoroscopePredictions = async (payload: HoroscopePredictionsReque
     throw error;
   }
 };
+
+/**
+ * Call the VedAstro PanchangaTable API
+ */
+const formatDateToDDMMYYYY = (dateStr: any): string => {
+  if (!dateStr) {
+    const d = new Date();
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    return `${day}-${month}-${d.getFullYear()}`;
+  }
+
+  if (dateStr instanceof Date) {
+    const day = String(dateStr.getDate()).padStart(2, '0');
+    const month = String(dateStr.getMonth() + 1).padStart(2, '0');
+    return `${day}-${month}-${dateStr.getFullYear()}`;
+  }
+
+  const cleanStr = String(dateStr).trim();
+
+  // Case 1: Already has DD-MM-YYYY format
+  if (/^\d{2}-\d{2}-\d{4}$/.test(cleanStr)) {
+    return cleanStr;
+  }
+
+  // Case 2: Slash separated DD/MM/YYYY (common in India)
+  const slashParts = cleanStr.split('/');
+  if (slashParts.length === 3) {
+    let day = slashParts[0].trim().padStart(2, '0');
+    let month = slashParts[1].trim().padStart(2, '0');
+    let year = slashParts[2].trim();
+    // Validate values to avoid NaN
+    if (!isNaN(Number(day)) && !isNaN(Number(month)) && Number(month) <= 12) {
+      return `${day}-${month}-${year}`;
+    }
+  }
+
+  // Case 3: Space separated like "20 Jul 2026"
+  const spaceParts = cleanStr.split(/\s+/);
+  if (spaceParts.length === 3) {
+    let day = spaceParts[0].replace(/[^0-9]/g, '').trim().padStart(2, '0');
+    let monthStr = spaceParts[1].toLowerCase();
+    let year = spaceParts[2].trim();
+
+    const monthsMap: Record<string, string> = {
+      jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06',
+      jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12',
+      january: '01', february: '02', march: '03', april: '04', june: '06',
+      july: '07', august: '08', september: '09', october: '10', november: '11', december: '12'
+    };
+
+    let month = monthsMap[monthStr] || '07';
+    return `${day}-${month}-${year}`;
+  }
+
+  // Standard fallback
+  const d = new Date(cleanStr);
+  if (isNaN(d.getTime())) {
+    const fallbackD = new Date();
+    const day = String(fallbackD.getDate()).padStart(2, '0');
+    const month = String(fallbackD.getMonth() + 1).padStart(2, '0');
+    return `${day}-${month}-${fallbackD.getFullYear()}`;
+  }
+
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  return `${day}-${month}-${d.getFullYear()}`;
+};
+
+/**
+ * Call the VedAstro PanchangaTable API
+ */
+export const getPanchangaTable = async (
+  date: Date | string,
+  latitude: number,
+  longitude: number,
+  locationName: string
+): Promise<any> => {
+  const dateFormatted = formatDateToDDMMYYYY(date);
+  
+  // Format coordinates cleanly
+  const latClean = Number(latitude || 28.6139).toFixed(4);
+  const lngClean = Number(longitude || 77.2090).toFixed(4);
+  
+  const url = `https://api.vedastro.org/api/Calculate/PanchangaTable/Location/${latClean},${lngClean}/Time/12:00/${dateFormatted}/+05:30/Ayanamsa/RAMAN`;
+
+  try {
+    const response = await axios.get(url, { timeout: 12000 });
+    return response.data;
+  } catch (error: any) {
+    console.error('VedAstro getPanchangaTable Error:', error?.response?.data || error.message || error);
+    throw error;
+  }
+};

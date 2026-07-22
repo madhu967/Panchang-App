@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   View, 
   ScrollView, 
@@ -554,14 +554,14 @@ export const NumerologyScreen = ({ navigation }: any) => {
   };
 
   // Derived attributes of the calculated numbers
-  const nameSignDetails = useMemo(() => {
+  const nameSignDetails = React.useMemo(() => {
     if (!numerologyData) return { title: '', planet: '', desc: '' };
     // Use the parsed root number from the API prediction, or calculate locally
     const targetNum = numerologyData.namePredictionRoot || reduceToSingleDigit(numerologyData.nameNumber);
     return getNumerologySignDetails(targetNum);
   }, [numerologyData]);
 
-  const destinySignDetails = useMemo(() => {
+  const destinySignDetails = React.useMemo(() => {
     if (!numerologyData) return { title: '', planet: '', desc: '' };
     return getNumerologySignDetails(numerologyData.destinyNumber);
   }, [numerologyData]);

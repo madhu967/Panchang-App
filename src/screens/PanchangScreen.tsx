@@ -5,7 +5,7 @@ import { Typography } from '../components/Typography';
 import { PremiumCard } from '../components/PremiumCard';
 import { AppHeader } from '../components/AppHeader';
 import { MapPin, Calendar as CalendarIcon, Sun, Moon, Sparkles, AlertCircle, Clock, ChevronRight } from 'lucide-react-native';
-import { getSunriseTime, getSunsetTime } from '../services/vedAstroApi';
+import { getSunriseTime, getSunsetTime, getPanchangaTable } from '../services/vedAstroApi';
 
 interface PanchangScreenProps {
   navigation?: any;
@@ -29,44 +29,154 @@ export const PanchangScreen: React.FC<PanchangScreenProps> = ({ navigation, rout
 
   const [sunriseTime, setSunriseTime] = useState<string>('05:48 AM');
   const [sunsetTime, setSunsetTime] = useState<string>('06:52 PM');
-  const [isLoadingSunTimes, setIsLoadingSunTimes] = useState<boolean>(false);
+  const [panchangaTableData, setPanchangaTableData] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const parseSunriseSunset = (timeStr: string) => {
+    if (!timeStr) return null;
+    const timePart = timeStr.split(' ')[0];
+    if (!timePart) return null;
+    const parts = timePart.split(':');
+    if (parts.length >= 2) {
+      let hour = parseInt(parts[0], 10);
+      const minute = parts[1];
+      const ampm = hour >= 12 ? 'PM' : 'AM';
+      hour = hour % 12;
+      hour = hour ? hour : 12;
+      return `${String(hour).padStart(2, '0')}:${minute} ${ampm}`;
+    }
+    return timePart;
+  };
 
   useEffect(() => {
     let isMounted = true;
-    const fetchSunTimes = async () => {
-      setIsLoadingSunTimes(true);
+    
+    const loadPanchangDetails = async () => {
+      setIsLoading(true);
+      setErrorMsg(null);
+      
       try {
-        const [sunrise, sunset] = await Promise.all([
-          getSunriseTime(date, latitude, longitude, location),
-          getSunsetTime(date, latitude, longitude, location),
-        ]);
-
+        const response = await getPanchangaTable(date, latitude, longitude, location);
+        
         if (isMounted) {
-          const cleanSunrise = sunrise.split(' ')[0] || sunrise;
-          const cleanSunset = sunset.split(' ')[0] || sunset;
-          setSunriseTime(cleanSunrise);
-          setSunsetTime(cleanSunset);
+          const payload = response?.Payload?.PanchangaTable || response?.Payload || response;
+          if (payload && payload.Tithi) {
+            setPanchangaTableData(payload);
+            
+            if (payload.Sunrise?.StdTime && !payload.Sunrise.StdTime.includes('1999')) {
+              setSunriseTime(parseSunriseSunset(payload.Sunrise.StdTime) || '05:48 AM');
+            } else {
+              try {
+                const sunrise = await getSunriseTime(date, latitude, longitude, location);
+                setSunriseTime(sunrise.split(' ')[0] || sunrise);
+              } catch (e) {
+                console.warn('Failed to fetch fallback sunrise time:', e);
+                setSunriseTime('05:48 AM');
+              }
+            }
+
+            if (payload.Sunset?.StdTime && !payload.Sunset.StdTime.includes('1999')) {
+              setSunsetTime(parseSunriseSunset(payload.Sunset.StdTime) || '06:52 PM');
+            } else {
+              try {
+                const sunset = await getSunsetTime(date, latitude, longitude, location);
+                setSunsetTime(sunset.split(' ')[0] || sunset);
+              } catch (e) {
+                console.warn('Failed to fetch fallback sunset time:', e);
+                setSunsetTime('06:52 PM');
+              }
+            }
+          } else {
+            throw new Error("Invalid PanchangaTable structure");
+          }
         }
-      } catch (err) {
-        console.warn('Failed to fetch sun times on PanchangScreen:', err);
+      } catch (err: any) {
+        console.warn('Failed to load PanchangaTable, using offline fallback calculations:', err);
+        if (isMounted) {
+          setErrorMsg('API offline. Showing standard values.');
+          try {
+            const [sunrise, sunset] = await Promise.all([
+              getSunriseTime(date, latitude, longitude, location),
+              getSunsetTime(date, latitude, longitude, location),
+            ]);
+            setSunriseTime(sunrise.split(' ')[0] || sunrise);
+            setSunsetTime(sunset.split(' ')[0] || sunset);
+          } catch (e) {
+            // fallback defaults
+          }
+        }
       } finally {
-        if (isMounted) setIsLoadingSunTimes(false);
+        if (isMounted) setIsLoading(false);
       }
     };
 
-    fetchSunTimes();
+    loadPanchangDetails();
     return () => { isMounted = false; };
   }, [location, latitude, longitude, date]);
 
-  const panchangData = [
-    { title: 'Tithi', value: 'Shukla Dashami', subValue: 'Ends at 02:45 PM' },
-    { title: 'Nakshatra', value: 'Vishakha', subValue: 'Ends at 11:30 PM' },
-    { title: 'Yoga', value: 'Shiva', subValue: 'Ends at 05:15 AM (Next Day)' },
-    { title: 'Karana', value: 'Taitila', subValue: 'Ends at 02:45 PM' },
-    { title: 'Paksha', value: 'Shukla Paksha', subValue: 'Bright Half' },
-    { title: 'Rasi (Moon)', value: 'Tula (Libra)', subValue: 'Up to 05:20 PM' },
-    { title: 'Rasi (Sun)', value: 'Karka (Cancer)', subValue: 'Dakshinayana' },
-  ];
+  const parsedPanchangList = React.useMemo(() => {
+    if (!panchangaTableData) {
+      return [
+        { title: 'Tithi', value: 'Shukla Dashami', subValue: 'Ends at 02:45 PM' },
+        { title: 'Nakshatra', value: 'Vishakha', subValue: 'Ends at 11:30 PM' },
+        { title: 'Yoga', value: 'Shiva', subValue: 'Ends at 05:15 AM (Next Day)' },
+        { title: 'Karana', value: 'Taitila', subValue: 'Ends at 02:45 PM' },
+        { title: 'Paksha', value: 'Shukla Paksha', subValue: 'Bright Half' },
+        { title: 'Lunar Month', value: 'Ashadha', subValue: 'Vedic Lunar cycle' },
+        { title: 'Vara (Day)', value: 'Monday', subValue: 'Moon ruled day' },
+      ];
+    }
+
+    const t = panchangaTableData;
+    return [
+      { 
+        title: 'Tithi (Lunar Day)', 
+        value: `${t.Tithi?.Name || 'N/A'} (${t.Tithi?.Paksha || ''})`, 
+        subValue: `Day: ${t.Tithi?.Day || 'N/A'}, Phase: ${t.Tithi?.Phase || ''}` 
+      },
+      { 
+        title: 'Nakshatra (Star)', 
+        value: t.Nakshatra || 'N/A', 
+        subValue: 'Vedic birth star constellation' 
+      },
+      { 
+        title: 'Yoga (Luni-Solar)', 
+        value: t.Yoga?.Name || 'N/A', 
+        subValue: t.Yoga?.Description || 'Auspicious celestial yoga' 
+      },
+      { 
+        title: 'Karana (Half Tithi)', 
+        value: t.Karana || 'N/A', 
+        subValue: 'Action-oriented time division' 
+      },
+      { 
+        title: 'Vara (Weekday)', 
+        value: t.Vara || 'N/A', 
+        subValue: `Hora Lord: ${t.HoraLord?.Name || ''}` 
+      },
+      { 
+        title: 'Lunar Month', 
+        value: t.LunarMonth || 'N/A', 
+        subValue: 'Sanskrit calendar month name' 
+      },
+      { 
+        title: 'Disha Shool', 
+        value: `Avoid travel to ${t.DishaShool || 'N/A'}`, 
+        subValue: 'Directional energetic pressure today' 
+      },
+      { 
+        title: 'Ayanamsa', 
+        value: t.Ayanamsa || 'N/A', 
+        subValue: 'Precise planetary precession angle' 
+      },
+      { 
+        title: 'Ishta Kaala', 
+        value: t.IshtaKaala?.DegreeMinuteSecond || 'N/A', 
+        subValue: 'Auspicious birth/moment time measure' 
+      },
+    ];
+  }, [panchangaTableData]);
 
   const auspiciousTimings = [
     { title: 'Abhijit Muhurat', time: '11:54 AM - 12:48 PM', type: 'Best Time' },
@@ -110,7 +220,7 @@ export const PanchangScreen: React.FC<PanchangScreenProps> = ({ navigation, rout
             <View style={styles.sunBox}>
               <Sun color={colors.primary} size={24} />
               <Typography variant="caption" color="muted" style={{ marginTop: 6 }}>Sunrise</Typography>
-              {isLoadingSunTimes ? (
+              {isLoading ? (
                 <ActivityIndicator size="small" color={colors.primary} style={{ marginTop: 2 }} />
               ) : (
                 <Typography variant="body" weight="bold">{sunriseTime}</Typography>
@@ -122,7 +232,7 @@ export const PanchangScreen: React.FC<PanchangScreenProps> = ({ navigation, rout
             <View style={styles.sunBox}>
               <Moon color={colors.secondary} size={24} />
               <Typography variant="caption" color="muted" style={{ marginTop: 6 }}>Sunset</Typography>
-              {isLoadingSunTimes ? (
+              {isLoading ? (
                 <ActivityIndicator size="small" color={colors.primary} style={{ marginTop: 2 }} />
               ) : (
                 <Typography variant="body" weight="bold">{sunsetTime}</Typography>
@@ -144,22 +254,40 @@ export const PanchangScreen: React.FC<PanchangScreenProps> = ({ navigation, rout
           5 Principal Elements (Panchang)
         </Typography>
 
+        {errorMsg && (
+          <View style={{ marginBottom: 12, flexDirection: 'row', alignItems: 'center', backgroundColor: colors.border + '15', padding: 10, borderRadius: 12 }}>
+            <AlertCircle color={colors.primary} size={16} />
+            <Typography variant="caption" color="muted" style={{ marginLeft: 8 }}>
+              {errorMsg}
+            </Typography>
+          </View>
+        )}
+
         <PremiumCard style={styles.summaryCard}>
-          {panchangData.map((item, idx) => (
-            <View 
-              key={idx} 
-              style={[
-                styles.dataRow, 
-                idx !== panchangData.length - 1 && { borderBottomWidth: 1, borderBottomColor: isDark ? '#1E1E26' : '#F0EAD6' }
-              ]}
-            >
-              <View style={{ flex: 1 }}>
-                <Typography variant="body" weight="semibold">{item.title}</Typography>
-                <Typography variant="caption" color="muted">{item.subValue}</Typography>
-              </View>
-              <Typography variant="body" weight="bold" color="primary">{item.value}</Typography>
+          {isLoading ? (
+            <View style={{ paddingVertical: 40, alignItems: 'center', justifyContent: 'center' }}>
+              <ActivityIndicator size="large" color={colors.primary} />
+              <Typography variant="caption" color="muted" style={{ marginTop: 12 }}>
+                Fetching planetary elements from VedAstro...
+              </Typography>
             </View>
-          ))}
+          ) : (
+            parsedPanchangList.map((item, idx) => (
+              <View 
+                key={idx} 
+                style={[
+                  styles.dataRow, 
+                  idx !== parsedPanchangList.length - 1 && { borderBottomWidth: 1, borderBottomColor: isDark ? '#1E1E26' : '#F0EAD6' }
+                ]}
+              >
+                <View style={{ flex: 1 }}>
+                  <Typography variant="body" weight="semibold">{item.title}</Typography>
+                  <Typography variant="caption" color="muted">{item.subValue}</Typography>
+                </View>
+                <Typography variant="body" weight="bold" color="primary">{item.value}</Typography>
+              </View>
+            ))
+          )}
         </PremiumCard>
 
         {/* Auspicious Muhurthas */}
