@@ -17,6 +17,7 @@ import { FestivalsScreen } from '../screens/FestivalsScreen';
 import { MenuScreen } from '../screens/MenuScreen';
 import { DailyHoroscopeScreen } from '../screens/DailyHoroscopeScreen';
 import { NumerologyScreen } from '../screens/NumerologyScreen';
+import { KundaliChartScreen } from '../screens/KundaliChartScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -158,6 +159,7 @@ export const AppNavigator = () => {
         <Stack.Screen name="Main" component={TabNavigator} />
         <Stack.Screen name="DailyHoroscope" component={DailyHoroscopeScreen} />
         <Stack.Screen name="Numerology" component={NumerologyScreen} />
+        <Stack.Screen name="KundaliChart" component={KundaliChartScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

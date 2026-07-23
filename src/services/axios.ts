@@ -16,10 +16,23 @@ const axios = {
     const controller = new AbortController();
     const timeoutId = config?.timeout ? setTimeout(() => controller.abort(), config.timeout) : null;
 
+    // Set up headers and automatically inject x-api-key for VedAstro requests if available
+    const requestHeaders: Record<string, string> = { ...(config?.headers || {}) };
+    if (url.includes('vedastro.org') && process.env.EXPO_PUBLIC_VEDASTRO_API_KEY) {
+      requestHeaders['x-api-key'] = process.env.EXPO_PUBLIC_VEDASTRO_API_KEY;
+    }
+    if (url.includes('api.navamsha.in')) {
+      const apiKey = process.env.EXPO_PUBLIC_NAVAMSHA_API_KEY;
+      if (apiKey) {
+        requestHeaders['X-API-Key'] = apiKey;
+      }
+      requestHeaders['Accept'] = 'application/json';
+    }
+
     try {
       const response = await fetch(url, {
         method: 'GET',
-        headers: config?.headers,
+        headers: requestHeaders,
         signal: controller.signal,
       });
 
@@ -37,7 +50,14 @@ const axios = {
         throw err;
       }
 
-      const data = await response.json();
+      const responseText = await response.text();
+      let data: any;
+      try {
+        data = JSON.parse(responseText);
+      } catch {
+        data = responseText;
+      }
+
       return {
         data,
         status: response.status,
@@ -55,13 +75,26 @@ const axios = {
     const controller = new AbortController();
     const timeoutId = config?.timeout ? setTimeout(() => controller.abort(), config.timeout) : null;
 
+    // Set up headers and automatically inject x-api-key for VedAstro requests if available
+    const requestHeaders: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...(config?.headers || {}),
+    };
+    if (url.includes('vedastro.org') && process.env.EXPO_PUBLIC_VEDASTRO_API_KEY) {
+      requestHeaders['x-api-key'] = process.env.EXPO_PUBLIC_VEDASTRO_API_KEY;
+    }
+    if (url.includes('api.navamsha.in')) {
+      const apiKey = process.env.EXPO_PUBLIC_NAVAMSHA_API_KEY;
+      if (apiKey) {
+        requestHeaders['X-API-Key'] = apiKey;
+      }
+      requestHeaders['Accept'] = 'application/json';
+    }
+
     try {
       const response = await fetch(url, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(config?.headers || {}),
-        },
+        headers: requestHeaders,
         body: JSON.stringify(data),
         signal: controller.signal,
       });
@@ -80,7 +113,14 @@ const axios = {
         throw err;
       }
 
-      const resData = await response.json();
+      const responseText = await response.text();
+      let resData: any;
+      try {
+        resData = JSON.parse(responseText);
+      } catch {
+        resData = responseText;
+      }
+
       return {
         data: resData,
         status: response.status,

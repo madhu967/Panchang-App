@@ -289,3 +289,46 @@ export const getPanchangaTable = async (
     throw error;
   }
 };
+
+export interface NorthIndianChartRequest {
+  Time: {
+    StdTime: string;
+    Location: {
+      Name: string;
+      Latitude: number;
+      Longitude: number;
+    };
+  };
+  ChartType: string;
+  Ayanamsa: string;
+}
+
+export const getNorthIndianChart = async (payload: NorthIndianChartRequest): Promise<string> => {
+  try {
+    const response = await axios.post('https://api.vedastro.org/api/Calculate/NorthIndianChart', payload, {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      timeout: 25000,
+    });
+
+    const data = response.data;
+    // In some cases, the payload might be double-nested or inside a wrapper.
+    const svgContent = data?.Payload || data?.Payload?.NorthIndianChart || (typeof data === 'string' ? data : null);
+
+    if (svgContent && typeof svgContent === 'string') {
+      return svgContent;
+    }
+
+    if (typeof data === 'object') {
+      // If we got an object but couldn't find Svg, stringify it for fallback or log it
+      console.warn('VedAstro returned object but no payload string:', data);
+    }
+
+    throw new Error('SVG content not found in VedAstro response');
+  } catch (error: any) {
+    console.error('VedAstro getNorthIndianChart Error:', error?.response?.data || error.message || error);
+    throw error;
+  }
+};
+

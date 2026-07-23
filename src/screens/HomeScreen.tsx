@@ -7,8 +7,8 @@ import { AppHeader } from '../components/AppHeader';
 import { AnimatedVedicFooter } from '../components/AnimatedVedicFooter';
 import { HomeCarouselCard } from '../components/HomeCarouselCard';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Menu, Sun, Moon, Calendar as CalendarIcon, MapPin, Compass, Search, Navigation, Sparkles, Star, ChevronRight, X, ArrowRight, ShieldCheck, Home, Heart } from 'lucide-react-native';
-import { searchLocationSuggestions, LocationItem } from '../services/locationService';
+import { Menu, Sun, Moon, Calendar as CalendarIcon, MapPin, Compass, Search, Navigation, Sparkles, Star, ChevronRight, ChevronLeft, X, ArrowRight, ShieldCheck, Home, Heart } from 'lucide-react-native';
+import { searchLocationSuggestions, LocationItem, getCurrentLocationByIp, setCachedLocation } from '../services/locationService';
 import { getSunriseTime, getSunsetTime } from '../services/vedAstroApi';
 
 const { width } = Dimensions.get('window');
@@ -75,7 +75,17 @@ export const HomeScreen = ({ navigation }: any) => {
   const [location, setLocation] = useState('New Delhi, India');
   const [latitude, setLatitude] = useState(28.6139);
   const [longitude, setLongitude] = useState(77.2090);
-  const [date, setDate] = useState('20 Jul 2026');
+  const [date, setDate] = useState(() => {
+    const d = new Date();
+    const day = d.getDate();
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return `${day} ${months[d.getMonth()]} ${d.getFullYear()}`;
+  });
+
+  const [pickerDate, setPickerDate] = useState(new Date());
+  const [showDatePickerModal, setShowDatePickerModal] = useState(false);
+  const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
+  const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
 
   const [sunriseTime, setSunriseTime] = useState<string>('05:48 AM');
   const [sunsetTime, setSunsetTime] = useState<string>('06:52 PM');
@@ -85,6 +95,29 @@ export const HomeScreen = ({ navigation }: any) => {
   const [locationInput, setLocationInput] = useState(location);
   const [suggestions, setSuggestions] = useState<LocationItem[]>([]);
   const [isSearchingLocation, setIsSearchingLocation] = useState(false);
+  const [isDetectingLocation, setIsDetectingLocation] = useState(false);
+
+  // Auto-detect location on startup
+  useEffect(() => {
+    const autoDetect = async () => {
+      setIsDetectingLocation(true);
+      try {
+        const detected = await getCurrentLocationByIp();
+        if (detected) {
+          setLocation(detected.name);
+          setLatitude(detected.latitude);
+          setLongitude(detected.longitude);
+          setLocationInput(detected.name);
+          setCachedLocation(detected);
+        }
+      } catch (err) {
+        console.warn('Auto location detection failed:', err);
+      } finally {
+        setIsDetectingLocation(false);
+      }
+    };
+    autoDetect();
+  }, []);
 
   // Debounced location search effect
   useEffect(() => {
@@ -150,7 +183,54 @@ export const HomeScreen = ({ navigation }: any) => {
     setLatitude(item.latitude);
     setLongitude(item.longitude);
     setLocationInput(item.name);
+    setCachedLocation(item);
     setShowLocationModal(false);
+  };
+
+  const calendarDays = React.useMemo(() => {
+    const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+    const firstDayIndex = new Date(currentYear, currentMonth, 1).getDay();
+    
+    const days = [];
+    for (let i = 0; i < firstDayIndex; i++) {
+      days.push({ day: null, key: `empty-${i}` });
+    }
+    for (let d = 1; d <= daysInMonth; d++) {
+      days.push({ day: d, key: `day-${d}` });
+    }
+    return days;
+  }, [currentMonth, currentYear]);
+
+  const monthsList = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+
+  const handlePrevMonth = () => {
+    if (currentMonth === 0) {
+      setCurrentMonth(11);
+      setCurrentYear(currentYear - 1);
+    } else {
+      setCurrentMonth(currentMonth - 1);
+    }
+  };
+
+  const handleNextMonth = () => {
+    if (currentMonth === 11) {
+      setCurrentMonth(0);
+      setCurrentYear(currentYear + 1);
+    } else {
+      setCurrentMonth(currentMonth + 1);
+    }
+  };
+
+  const handleSelectDay = (dayNum: number) => {
+    const selected = new Date(currentYear, currentMonth, dayNum);
+    setPickerDate(selected);
+    const day = selected.getDate();
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    setDate(`${day} ${months[selected.getMonth()]} ${selected.getFullYear()}`);
+    setShowDatePickerModal(false);
   };
 
 
@@ -209,18 +289,26 @@ export const HomeScreen = ({ navigation }: any) => {
             </View>
           </PremiumCard>
 
-          <PremiumCard style={styles.todayCard}>
-            <View style={styles.todayRow}>
-              <View>
-                <Typography variant="caption" color="muted" weight="medium">Wed, 20 Jul 2026</Typography>
-                <Typography variant="subtitle" weight="bold" style={{ marginTop: 2 }}>Shukla Dashami</Typography>
+          <TouchableOpacity activeOpacity={0.85} onPress={handleCalculate}>
+            <PremiumCard style={styles.todayCard}>
+              <View style={styles.todayRow}>
+                <View>
+                  <Typography variant="caption" color="muted" weight="medium">
+                    {(() => {
+                      const d = new Date();
+                      const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                      return `${weekdays[d.getDay()]}, ${date}`;
+                    })()}
+                  </Typography>
+                  <Typography variant="subtitle" weight="bold" style={{ marginTop: 2 }}>Shukla Dashami</Typography>
+                </View>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Typography variant="caption" color="muted" weight="medium">Nakshatra</Typography>
+                  <Typography variant="subtitle" weight="bold" style={{ marginTop: 2 }}>Vishakha</Typography>
+                </View>
               </View>
-              <View style={{ alignItems: 'flex-end' }}>
-                <Typography variant="caption" color="muted" weight="medium">Nakshatra</Typography>
-                <Typography variant="subtitle" weight="bold" style={{ marginTop: 2 }}>Vishakha</Typography>
-              </View>
-            </View>
-          </PremiumCard>
+            </PremiumCard>
+          </TouchableOpacity>
         </View>
 
         {/* Sliding Cards Carousel */}
@@ -239,7 +327,13 @@ export const HomeScreen = ({ navigation }: any) => {
                 key={item.id}
                 item={item as any}
                 cardWidth={width - 80}
-                onPress={() => navigation.navigate(item.navTarget)}
+                onPress={() => {
+                  if (item.navTarget === 'Panchang') {
+                    navigation.navigate('Panchang', { location, latitude, longitude, date });
+                  } else {
+                    navigation.navigate(item.navTarget);
+                  }
+                }}
               />
             ))}
           </ScrollView>
@@ -276,13 +370,22 @@ export const HomeScreen = ({ navigation }: any) => {
           
           <View style={[styles.divider, { backgroundColor: colors.border }]} />
           
-          <View style={styles.inputRow}>
+          <TouchableOpacity 
+            style={styles.inputRow} 
+            onPress={() => {
+              setCurrentMonth(pickerDate.getMonth());
+              setCurrentYear(pickerDate.getFullYear());
+              setShowDatePickerModal(true);
+            }} 
+            activeOpacity={0.7}
+          >
             <CalendarIcon color={colors.secondary} size={20} />
             <View style={{ marginLeft: 12, flex: 1 }}>
               <Typography variant="caption" color="muted" weight="medium">Selected Date</Typography>
               <Typography variant="body" weight="bold">{date}</Typography>
             </View>
-          </View>
+            <ChevronRight color={colors.textSecondary} size={18} />
+          </TouchableOpacity>
 
           <TouchableOpacity 
             style={[styles.calculateBtn, { backgroundColor: colors.primary }]} 
@@ -310,7 +413,13 @@ export const HomeScreen = ({ navigation }: any) => {
             return (
               <TouchableOpacity 
                 key={idx} 
-                onPress={() => navigation.navigate(item.target)}
+                onPress={() => {
+                  if (item.target === 'Panchang') {
+                    navigation.navigate('Panchang', { location, latitude, longitude, date });
+                  } else {
+                    navigation.navigate(item.target);
+                  }
+                }}
                 activeOpacity={0.7}
                 style={[
                   styles.chip, 
@@ -366,6 +475,43 @@ export const HomeScreen = ({ navigation }: any) => {
                 )}
               </View>
 
+              {/* Detect Current Location Button */}
+              <TouchableOpacity 
+                style={[
+                  styles.detectLocationBtn, 
+                  { 
+                    backgroundColor: colors.primary + '15',
+                    borderColor: colors.primary,
+                    borderWidth: 1 
+                  }
+                ]}
+                onPress={async () => {
+                  setIsDetectingLocation(true);
+                  try {
+                    const detected = await getCurrentLocationByIp();
+                    if (detected) {
+                      selectLocationItem(detected);
+                    }
+                  } catch (err) {
+                    console.warn('IP Geolocation failed:', err);
+                  } finally {
+                    setIsDetectingLocation(false);
+                  }
+                }}
+                disabled={isDetectingLocation || isSearchingLocation}
+              >
+                {isDetectingLocation ? (
+                  <ActivityIndicator size="small" color={colors.primary} />
+                ) : (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+                    <Navigation color={colors.primary} size={16} />
+                    <Typography variant="body" weight="semibold" style={{ color: colors.primary, marginLeft: 8 }}>
+                      Use Current Location
+                    </Typography>
+                  </View>
+                )}
+              </TouchableOpacity>
+
               <Typography variant="caption" color="muted" weight="bold" style={{ marginTop: 16, marginBottom: 8 }}>
                 {suggestions.length > 0 ? 'Search Results' : 'Quick Suggestions'}
               </Typography>
@@ -389,6 +535,84 @@ export const HomeScreen = ({ navigation }: any) => {
                   </TouchableOpacity>
                 ))}
               </ScrollView>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Custom Calendar Date Picker Modal */}
+        <Modal visible={showDatePickerModal} transparent animationType="slide">
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalContent, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 }]}>
+              <View style={styles.modalHeader}>
+                <Typography variant="subtitle" weight="bold">Select Date</Typography>
+                <TouchableOpacity onPress={() => setShowDatePickerModal(false)}>
+                  <X color={colors.text} size={24} />
+                </TouchableOpacity>
+              </View>
+
+              {/* Month navigation header */}
+              <View style={styles.calendarNavHeader}>
+                <TouchableOpacity onPress={handlePrevMonth} style={styles.navBtn}>
+                  <ChevronLeft color={colors.primary} size={24} />
+                </TouchableOpacity>
+                <Typography variant="body" weight="bold" style={{ fontSize: 16 }}>
+                  {monthsList[currentMonth]} {currentYear}
+                </Typography>
+                <TouchableOpacity onPress={handleNextMonth} style={styles.navBtn}>
+                  <ChevronRight color={colors.primary} size={24} />
+                </TouchableOpacity>
+              </View>
+
+              {/* Days of week header */}
+              <View style={styles.weekdaysRow}>
+                {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((dayName, idx) => (
+                  <View key={idx} style={styles.weekdayCell}>
+                    <Typography variant="caption" color="muted" weight="bold" style={{ textAlign: 'center' }}>
+                      {dayName}
+                    </Typography>
+                  </View>
+                ))}
+              </View>
+
+              {/* Days grid */}
+              <View style={styles.daysGrid}>
+                {calendarDays.map((item, idx) => {
+                  const isSelected = item.day !== null &&
+                    pickerDate.getDate() === item.day &&
+                    pickerDate.getMonth() === currentMonth &&
+                    pickerDate.getFullYear() === currentYear;
+
+                  const isToday = item.day !== null &&
+                    new Date().getDate() === item.day &&
+                    new Date().getMonth() === currentMonth &&
+                    new Date().getFullYear() === currentYear;
+
+                  return (
+                    <TouchableOpacity
+                      key={item.key}
+                      style={[
+                        styles.dayCell,
+                        isSelected && { backgroundColor: colors.primary }
+                      ]}
+                      disabled={item.day === null}
+                      onPress={() => item.day !== null && handleSelectDay(item.day)}
+                    >
+                      {item.day !== null ? (
+                        <Typography
+                          variant="body"
+                          weight={isSelected ? 'bold' : isToday ? 'bold' : 'regular'}
+                          style={{
+                            color: isSelected ? '#FFFFFF' : isToday ? colors.primary : colors.text,
+                            textAlign: 'center'
+                          }}
+                        >
+                          {item.day}
+                        </Typography>
+                      ) : null}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
             </View>
           </View>
         </Modal>
@@ -563,5 +787,46 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  detectLocationBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 12,
+    height: 44,
+    borderRadius: 22,
+  },
+  calendarNavHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingHorizontal: 8,
+  },
+  navBtn: {
+    padding: 8,
+    borderRadius: 8,
+  },
+  weekdaysRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  weekdayCell: {
+    width: '14.28%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  daysGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  dayCell: {
+    width: '14.28%',
+    aspectRatio: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 20,
+    marginVertical: 2,
   },
 });

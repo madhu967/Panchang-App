@@ -75,3 +75,52 @@ export const searchLocationSuggestions = async (query: string): Promise<Location
 
   return [];
 };
+
+export const getCurrentLocationByIp = async (): Promise<LocationItem | null> => {
+  try {
+    const response = await axios.get('https://ipapi.co/json/', { timeout: 3500 });
+    if (response.data && response.data.latitude && response.data.longitude) {
+      const city = response.data.city || '';
+      const country = response.data.country_name || '';
+      const name = city ? `${city}, ${country}` : country || 'Detected Location';
+      return {
+        name,
+        fullName: `${city}, ${response.data.region || ''}, ${country}`,
+        latitude: parseFloat(response.data.latitude),
+        longitude: parseFloat(response.data.longitude),
+      };
+    }
+  } catch (error) {
+    console.warn('IP Geolocation failed, trying fallback:', error);
+  }
+
+  try {
+    const response = await axios.get('http://ip-api.com/json/', { timeout: 3500 });
+    if (response.data && response.data.status === 'success') {
+      const city = response.data.city || '';
+      const country = response.data.country || '';
+      const name = city ? `${city}, ${country}` : country || 'Detected Location';
+      return {
+        name,
+        fullName: `${city}, ${response.data.regionName || ''}, ${country}`,
+        latitude: parseFloat(response.data.lat),
+        longitude: parseFloat(response.data.lon),
+      };
+    }
+  } catch (error) {
+    console.error('All IP Geolocation attempts failed:', error);
+  }
+  return null;
+};
+
+let cachedLocation: LocationItem | null = null;
+
+export const setCachedLocation = (loc: LocationItem) => {
+  cachedLocation = loc;
+};
+
+export const getCachedLocation = (): LocationItem | null => {
+  return cachedLocation;
+};
+
+

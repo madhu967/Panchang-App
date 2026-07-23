@@ -4,7 +4,7 @@ import { useTheme } from '../theme/ThemeContext';
 import { Typography } from '../components/Typography';
 import { PremiumCard } from '../components/PremiumCard';
 import { AppHeader } from '../components/AppHeader';
-import { Moon, Compass, Sun, Globe, Bell, MapPin, Sparkles, ChevronRight, HelpCircle, Shield, Info, Smartphone, Check, Heart } from 'lucide-react-native';
+import { Moon, Compass, Sun, Globe, Bell, MapPin, Sparkles, ChevronRight, HelpCircle, Shield, Info, Smartphone, Check, Heart, Grid } from 'lucide-react-native';
 
 export const MenuScreen = ({ navigation }: any) => {
   const { colors, isDark, themeMode, setThemeMode, userOverride, setSystemDefault } = useTheme();
@@ -20,6 +20,7 @@ export const MenuScreen = ({ navigation }: any) => {
       title: 'Panchang & Astrology Utilities',
       items: [
         { icon: Heart, label: 'Kundali Match Checker', sub: 'Vedic compatibility score & details', route: 'MatchChecker' },
+        { icon: Grid, label: 'Divisional Kundali Charts', sub: 'Generate divisional D1 to D60 charts', route: 'KundaliChart' },
         { icon: Sparkles, label: 'Daily Horoscope', sub: 'Western daily, weekly & monthly predictions', route: 'DailyHoroscope' },
         { icon: Sparkles, label: 'Horoscope Predictions', sub: 'Personalised Vedic life interpretations', route: 'Horoscope' },
         { icon: Compass, label: 'Vedic Numerology Analysis', sub: 'Calculates Name & Destiny numbers', route: 'Numerology' },
