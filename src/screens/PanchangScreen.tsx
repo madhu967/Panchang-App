@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useIsFocused } from '@react-navigation/native';
 import { 
   View, 
   ScrollView, 
@@ -34,7 +35,7 @@ import {
   BookOpen
 } from 'lucide-react-native';
 import { getNavamshaPanchang } from '../services/navamshaApi';
-import { getCachedLocation } from '../services/locationService';
+import { getCachedLocation, getCachedDate } from '../services/locationService';
 
 const { width } = Dimensions.get('window');
 
@@ -67,12 +68,14 @@ interface NormalizedPanchang {
 
 export const PanchangScreen: React.FC<PanchangScreenProps> = ({ navigation, route }) => {
   const { colors, spacing, isDark } = useTheme();
+  const isFocused = useIsFocused();
 
   const cachedLoc = getCachedLocation();
+  const cachedDate = getCachedDate();
   const location = route?.params?.location || cachedLoc?.name || 'New Delhi, India';
   const latitude = route?.params?.latitude || cachedLoc?.latitude || 28.6139;
   const longitude = route?.params?.longitude || cachedLoc?.longitude || 77.2090;
-  const date = route?.params?.date || (() => {
+  const date = route?.params?.date || cachedDate || (() => {
     const d = new Date();
     const day = d.getDate();
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -92,34 +95,65 @@ export const PanchangScreen: React.FC<PanchangScreenProps> = ({ navigation, rout
 
   const normalizeResponse = (res: any): NormalizedPanchang => {
     const output = res?.output || res;
+
+    // Extract timezone offset string from sunrise (e.g. "+05:30") to parse target location's local time offset
+    const offsetMatch = output?.sunrise?.match(/([+-]\d{2}:\d{2}|Z)$/);
+    const offsetStr = offsetMatch ? offsetMatch[1] : '+05:30';
     
-    const formatIsoToTimeStr = (isoStr: string): string => {
+    // Parse offset string to minutes
+    let offsetMinutes = 330; // default to India
+    if (offsetStr && offsetStr !== 'Z') {
+      const match = offsetStr.match(/^([+-])(\d{2}):(\d{2})$/);
+      if (match) {
+        const sign = match[1] === '-' ? -1 : 1;
+        const hours = parseInt(match[2], 10);
+        const mins = parseInt(match[3], 10);
+        offsetMinutes = sign * (hours * 60 + mins);
+      }
+    } else if (offsetStr === 'Z') {
+      offsetMinutes = 0;
+    }
+    
+    const formatIsoToTimeStr = (isoStr: string, isUtc: boolean = false): string => {
       if (!isoStr) return 'N/A';
 
       try {
-        // Fix microseconds (.804213 -> .804)
-        const fixedIso = isoStr.replace(
-          /\.(\d{3})\d+/,
-          '.$1'
-        );
-
-        const d = new Date(fixedIso);
-
-        if (isNaN(d.getTime())) {
+        if (!isUtc) {
+          // For local times returned by the API, slice the time directly to preserve target location's local clock time
+          const timePart = isoStr.split('T')[1];
+          if (!timePart) return isoStr;
+          const match = timePart.match(/^(\d{2}):(\d{2})/);
+          if (match) {
+            const h = parseInt(match[1], 10);
+            const m = match[2];
+            const ampm = h >= 12 ? 'PM' : 'AM';
+            const displayHour = h % 12 || 12;
+            return `${String(displayHour).padStart(2, '0')}:${m} ${ampm}`;
+          }
           return isoStr;
+        } else {
+          // For UTC times (+00:00), shift standard milliseconds by the target location's timezone offset
+          const fixedIso = isoStr.replace(/\.(\d{3})\d+/, '.$1');
+          const d = new Date(fixedIso);
+          if (isNaN(d.getTime())) return isoStr;
+          
+          const localTimeMs = d.getTime() + offsetMinutes * 60 * 1000;
+          const localDate = new Date(localTimeMs);
+          const h = localDate.getUTCHours();
+          const m = String(localDate.getUTCMinutes()).padStart(2, '0');
+          const ampm = h >= 12 ? 'PM' : 'AM';
+          const displayHour = h % 12 || 12;
+          return `${String(displayHour).padStart(2, '0')}:${m} ${ampm}`;
         }
-
-        return d.toLocaleTimeString('en-IN', {
-          timeZone: 'Asia/Kolkata',
-          hour: '2-digit',
-          minute: '2-digit',
-          hour12: true,
-        });
-
       } catch (error) {
         console.log("Time parse error:", isoStr, error);
         return isoStr;
       }
+    };
+
+    const isDayStart = (isoStr: string): boolean => {
+      if (!isoStr) return false;
+      return isoStr.includes('T00:00:00');
     };
 
     const getFirstItem = (arr: any) => {
@@ -133,8 +167,8 @@ export const PanchangScreen: React.FC<PanchangScreenProps> = ({ navigation, rout
     const paksha = rawTithi?.paksha || '';
     const tithi = {
       name: paksha ? `${tithiName} (${paksha} Paksha)` : tithiName,
-      start: rawTithi?.start ? formatIsoToTimeStr(rawTithi.start) : '',
-      end: rawTithi?.end ? formatIsoToTimeStr(rawTithi.end) : '',
+      start: rawTithi?.start && !isDayStart(rawTithi.start) ? formatIsoToTimeStr(rawTithi.start, false) : '',
+      end: rawTithi?.end ? formatIsoToTimeStr(rawTithi.end, false) : '',
       detail: paksha ? `${paksha} Paksha` : ''
     };
 
@@ -142,8 +176,8 @@ export const PanchangScreen: React.FC<PanchangScreenProps> = ({ navigation, rout
     const rawNakshatra = getFirstItem(output?.nakshatra);
     const nakshatra = {
       name: rawNakshatra?.name || 'N/A',
-      start: rawNakshatra?.start ? formatIsoToTimeStr(rawNakshatra.start) : '',
-      end: rawNakshatra?.end ? formatIsoToTimeStr(rawNakshatra.end) : '',
+      start: rawNakshatra?.start && !isDayStart(rawNakshatra.start) ? formatIsoToTimeStr(rawNakshatra.start, false) : '',
+      end: rawNakshatra?.end ? formatIsoToTimeStr(rawNakshatra.end, false) : '',
       detail: rawNakshatra?.lord?.name ? `Lord: ${rawNakshatra.lord.name}` : ''
     };
 
@@ -151,8 +185,8 @@ export const PanchangScreen: React.FC<PanchangScreenProps> = ({ navigation, rout
     const rawYoga = getFirstItem(output?.yoga);
     const yoga = {
       name: rawYoga?.name || 'N/A',
-      start: rawYoga?.start ? formatIsoToTimeStr(rawYoga.start) : '',
-      end: rawYoga?.end ? formatIsoToTimeStr(rawYoga.end) : '',
+      start: rawYoga?.start && !isDayStart(rawYoga.start) ? formatIsoToTimeStr(rawYoga.start, false) : '',
+      end: rawYoga?.end ? formatIsoToTimeStr(rawYoga.end, false) : '',
       detail: ''
     };
 
@@ -160,8 +194,8 @@ export const PanchangScreen: React.FC<PanchangScreenProps> = ({ navigation, rout
     const rawKarana = getFirstItem(output?.karana);
     const karana = {
       name: rawKarana?.name || 'N/A',
-      start: rawKarana?.start ? formatIsoToTimeStr(rawKarana.start) : '',
-      end: rawKarana?.end ? formatIsoToTimeStr(rawKarana.end) : '',
+      start: rawKarana?.start && !isDayStart(rawKarana.start) ? formatIsoToTimeStr(rawKarana.start, false) : '',
+      end: rawKarana?.end ? formatIsoToTimeStr(rawKarana.end, false) : '',
       detail: ''
     };
 
@@ -171,19 +205,19 @@ export const PanchangScreen: React.FC<PanchangScreenProps> = ({ navigation, rout
       detail: output?.vaara ? `Weekday: ${output.vaara}` : ''
     };
 
-    // Sun & Moon times
-    const sunrise = output?.sunrise ? formatIsoToTimeStr(output.sunrise) : 'N/A';
-    const sunset = output?.sunset ? formatIsoToTimeStr(output.sunset) : 'N/A';
-    const moonrise = output?.moonrise ? formatIsoToTimeStr(output.moonrise) : 'N/A';
-    const moonset = output?.moonset ? formatIsoToTimeStr(output.moonset) : 'N/A';
+    // Sun & Moon times (returned in local offset already)
+    const sunrise = output?.sunrise ? formatIsoToTimeStr(output.sunrise, false) : 'N/A';
+    const sunset = output?.sunset ? formatIsoToTimeStr(output.sunset, false) : 'N/A';
+    const moonrise = output?.moonrise ? formatIsoToTimeStr(output.moonrise, false) : 'N/A';
+    const moonset = output?.moonset ? formatIsoToTimeStr(output.moonset, false) : 'N/A';
 
-    // Auspicious periods
+    // Auspicious periods (returned in UTC offset)
     const auspiciousPeriods: { title: string; time: string; type: string }[] = [];
     if (Array.isArray(output?.auspicious_period)) {
       output.auspicious_period.forEach((item: any) => {
         const periodObj = getFirstItem(item.period);
         if (periodObj) {
-          const timeRange = `${formatIsoToTimeStr(periodObj.start)} - ${formatIsoToTimeStr(periodObj.end)}`;
+          const timeRange = `${formatIsoToTimeStr(periodObj.start, true)} - ${formatIsoToTimeStr(periodObj.end, true)}`;
           auspiciousPeriods.push({
             title: item.name || 'Auspicious Muhurat',
             time: timeRange,
@@ -193,13 +227,13 @@ export const PanchangScreen: React.FC<PanchangScreenProps> = ({ navigation, rout
       });
     }
 
-    // Inauspicious periods
+    // Inauspicious periods (returned in UTC offset)
     const inauspiciousPeriods: { title: string; time: string }[] = [];
     if (Array.isArray(output?.inauspicious_period)) {
       output.inauspicious_period.forEach((item: any) => {
         const periodObj = getFirstItem(item.period);
         if (periodObj) {
-          const timeRange = `${formatIsoToTimeStr(periodObj.start)} - ${formatIsoToTimeStr(periodObj.end)}`;
+          const timeRange = `${formatIsoToTimeStr(periodObj.start, true)} - ${formatIsoToTimeStr(periodObj.end, true)}`;
           inauspiciousPeriods.push({
             title: item.name || 'Inauspicious Period',
             time: timeRange
@@ -255,6 +289,7 @@ export const PanchangScreen: React.FC<PanchangScreenProps> = ({ navigation, rout
   };
 
   useEffect(() => {
+    if (!isFocused) return;
     let isMounted = true;
     
     const loadPanchangDetails = async () => {
@@ -313,7 +348,7 @@ export const PanchangScreen: React.FC<PanchangScreenProps> = ({ navigation, rout
 
     loadPanchangDetails();
     return () => { isMounted = false; };
-  }, [location, latitude, longitude, date]);
+  }, [location, latitude, longitude, date, isFocused]);
 
   // Share functionality
   const handleShare = async () => {

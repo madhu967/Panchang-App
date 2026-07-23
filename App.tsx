@@ -1,11 +1,19 @@
 import React, { useState } from 'react';
-import { View } from 'react-native';
+import { View, ActivityIndicator } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider, useTheme } from './src/theme/ThemeContext';
 import { AppNavigator } from './src/navigation/AppNavigator';
 import { AnimatedSplashScreen } from './src/screens/AnimatedSplashScreen';
 import { useFonts } from 'expo-font';
+import './src/services/firebase';
+import { AuthProvider, useAuth } from './src/services/AuthContext';
+import { AuthScreen } from './src/screens/AuthScreen';
+import { StatusScreen } from './src/screens/StatusScreen';
+import { AdminDashboardScreen } from './src/screens/AdminDashboardScreen';
+
+
 import { 
   PlusJakartaSans_400Regular,
   PlusJakartaSans_500Medium,
@@ -24,7 +32,6 @@ const MainAppContent = () => {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      {/* Navigation pre-loaded underneath */}
       <AppNavigator />
 
       {/* Splash Screen overlay matching active theme */}
@@ -55,7 +62,9 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <ThemeProvider>
-        <MainAppContent />
+        <AuthProvider>
+          <MainAppContent />
+        </AuthProvider>
       </ThemeProvider>
     </SafeAreaProvider>
   );

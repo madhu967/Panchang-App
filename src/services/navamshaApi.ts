@@ -64,29 +64,36 @@ export const getNavamshaPanchang = async (
   const hours = isToday ? today.getHours() : 5;
   const minutes = isToday ? today.getMinutes() : 30;
   
-  // Calculate local timezone offset in hours
-  const timezone = -d.getTimezoneOffset() / 60;
+  // Estimate timezone offset from the selected longitude instead of using the local device's timezone offset.
+  // Using the wrong timezone for a coordinate causes sidereal time calculation mismatches and 500 server errors.
+  let timezone = Math.round(Number(longitude) / 15);
+  if (Number(longitude) >= 68 && Number(longitude) <= 98) {
+    timezone = 5.5; // Indian Standard Time
+  }
 
-  const body: NavamshaPanchangParams = {
+  const body = {
     year: d.getFullYear(),
     month: d.getMonth() + 1,
     date: d.getDate(),
     hours,
     minutes,
-    latitude: Number(latitude) || 16.5449,
-    longitude: Number(longitude) || 81.5212,
+    hour: hours,       // Singular form to support different API version schemas
+    minute: minutes,   // Singular form to support different API version schemas
+    latitude: (latitude !== undefined && latitude !== null && !isNaN(Number(latitude))) ? Number(latitude) : 16.5449,
+    longitude: (longitude !== undefined && longitude !== null && !isNaN(Number(longitude))) ? Number(longitude) : 81.5212,
     timezone,
   };
 
   const url = 'https://api.navamsha.in/api/v1/astrology/panchang/advanced';
   
   try {
+    console.log(`[Navamsha API] POST ${url} with body:`, JSON.stringify(body));
     const response = await axios.post(url, body, {
       timeout: 15000,
     });
     return response.data;
   } catch (error: any) {
-    console.error('Navamsha getNavamshaPanchang Error:', error?.response?.data || error.message || error);
+    console.error('Navamsha getNavamshaPanchang Error with body:', JSON.stringify(body), error?.response?.data || error.message || error);
     throw error;
   }
 };

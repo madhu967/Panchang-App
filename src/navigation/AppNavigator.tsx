@@ -3,9 +3,14 @@ import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { View, StyleSheet, Platform, Text } from 'react-native';
+import { View, StyleSheet, Platform, Text, ActivityIndicator } from 'react-native';
 import { BlurView } from 'expo-blur';
-import { Home, Moon, Calendar as CalendarIcon, Flame, Menu, Heart, Sparkles } from 'lucide-react-native';
+import { Home, Moon, Calendar as CalendarIcon, Flame, Menu, Heart, Sparkles, LogIn, User } from 'lucide-react-native';
+import { useAuth } from '../services/AuthContext';
+import { AuthScreen } from '../screens/AuthScreen';
+import { StatusScreen } from '../screens/StatusScreen';
+import { AdminDashboardScreen } from '../screens/AdminDashboardScreen';
+
 
 import { useTheme } from '../theme/ThemeContext';
 import { HomeScreen } from '../screens/HomeScreen';
@@ -22,8 +27,106 @@ import { KundaliChartScreen } from '../screens/KundaliChartScreen';
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
+const AccountWrapperScreen = () => {
+  const { user, userProfile, loading } = useAuth();
+  const { colors } = useTheme();
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
+  if (!user) {
+    return <AuthScreen />;
+  }
+
+  if (userProfile?.role === 'admin') {
+    return <AdminDashboardScreen />;
+  }
+
+  if (userProfile?.status === 'approved') {
+    return <MenuScreen />;
+  }
+
+  return <StatusScreen />;
+};
+
+const PanchangWrapper = ({ navigation, route }: any) => {
+  const { user, userProfile, loading } = useAuth();
+  const { colors } = useTheme();
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
+  if (!user) {
+    return <AuthScreen />;
+  }
+
+  if (userProfile?.role === 'admin' || userProfile?.status === 'approved') {
+    return <PanchangScreen navigation={navigation} route={route} />;
+  }
+
+  return <StatusScreen />;
+};
+
+const MatchCheckerWrapper = ({ navigation, route }: any) => {
+  const { user, userProfile, loading } = useAuth();
+  const { colors } = useTheme();
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
+  if (!user) {
+    return <AuthScreen />;
+  }
+
+  if (userProfile?.role === 'admin' || userProfile?.status === 'approved') {
+    return <MatchCheckerScreen navigation={navigation} route={route} />;
+  }
+
+  return <StatusScreen />;
+};
+
+const HoroscopeWrapper = ({ navigation, route }: any) => {
+  const { user, userProfile, loading } = useAuth();
+  const { colors } = useTheme();
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
+  if (!user) {
+    return <AuthScreen />;
+  }
+
+  if (userProfile?.role === 'admin' || userProfile?.status === 'approved') {
+    return <HoroscopePredictionsScreen navigation={navigation} route={route} />;
+  }
+
+  return <StatusScreen />;
+};
+
 const TabNavigator = () => {
   const { colors, isDark } = useTheme();
+  const { user } = useAuth();
+
 
   return (
     <Tab.Navigator
@@ -78,7 +181,7 @@ const TabNavigator = () => {
       />
       <Tab.Screen 
         name="Panchang" 
-        component={PanchangScreen} 
+        component={PanchangWrapper} 
         options={{
           tabBarLabel: 'Panchangam',
           tabBarIcon: ({ color, focused }) => (
@@ -90,7 +193,7 @@ const TabNavigator = () => {
       />
       <Tab.Screen 
         name="MatchChecker" 
-        component={MatchCheckerScreen} 
+        component={MatchCheckerWrapper} 
         options={{
           tabBarLabel: 'Match',
           tabBarIcon: ({ color, focused }) => (
@@ -102,7 +205,7 @@ const TabNavigator = () => {
       />
       <Tab.Screen 
         name="Horoscope" 
-        component={HoroscopePredictionsScreen} 
+        component={HoroscopeWrapper} 
         options={{
           tabBarLabel: 'Horoscope',
           tabBarIcon: ({ color, focused }) => (
@@ -137,13 +240,13 @@ const TabNavigator = () => {
         }}
       />
       <Tab.Screen 
-        name="Menu" 
-        component={MenuScreen} 
+        name="Account" 
+        component={AccountWrapperScreen} 
         options={{
-          tabBarLabel: 'Menu',
+          tabBarLabel: user ? 'Account' : 'Login',
           tabBarIcon: ({ color, focused }) => (
             <View style={[styles.iconWrapper, focused && { backgroundColor: colors.primary + '26' }]}>
-              <Menu color={color} size={22} />
+              {user ? <User color={color} size={22} /> : <LogIn color={color} size={22} />}
             </View>
           )
         }}
@@ -160,6 +263,7 @@ export const AppNavigator = () => {
         <Stack.Screen name="DailyHoroscope" component={DailyHoroscopeScreen} />
         <Stack.Screen name="Numerology" component={NumerologyScreen} />
         <Stack.Screen name="KundaliChart" component={KundaliChartScreen} />
+        <Stack.Screen name="Menu" component={MenuScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

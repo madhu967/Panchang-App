@@ -8,7 +8,7 @@ import { AnimatedVedicFooter } from '../components/AnimatedVedicFooter';
 import { HomeCarouselCard } from '../components/HomeCarouselCard';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Menu, Sun, Moon, Calendar as CalendarIcon, MapPin, Compass, Search, Navigation, Sparkles, Star, ChevronRight, ChevronLeft, X, ArrowRight, ShieldCheck, Home, Heart } from 'lucide-react-native';
-import { searchLocationSuggestions, LocationItem, getCurrentLocationByIp, setCachedLocation } from '../services/locationService';
+import { searchLocationSuggestions, LocationItem, getCurrentLocationByIp, setCachedLocation, getCachedLocation, setCachedDate } from '../services/locationService';
 import { getSunriseTime, getSunsetTime } from '../services/vedAstroApi';
 
 const { width } = Dimensions.get('window');
@@ -79,8 +79,15 @@ export const HomeScreen = ({ navigation }: any) => {
     const d = new Date();
     const day = d.getDate();
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    return `${day} ${months[d.getMonth()]} ${d.getFullYear()}`;
+    const initialDate = `${day} ${months[d.getMonth()]} ${d.getFullYear()}`;
+    setCachedDate(initialDate);
+    return initialDate;
   });
+
+  // Sync state date change with global cache
+  useEffect(() => {
+    setCachedDate(date);
+  }, [date]);
 
   const [pickerDate, setPickerDate] = useState(new Date());
   const [showDatePickerModal, setShowDatePickerModal] = useState(false);
@@ -100,15 +107,23 @@ export const HomeScreen = ({ navigation }: any) => {
   // Auto-detect location on startup
   useEffect(() => {
     const autoDetect = async () => {
+      // If user has already selected a location manually, do not overwrite it
+      const current = getCachedLocation();
+      if (current) return;
+
       setIsDetectingLocation(true);
       try {
         const detected = await getCurrentLocationByIp();
         if (detected) {
-          setLocation(detected.name);
-          setLatitude(detected.latitude);
-          setLongitude(detected.longitude);
-          setLocationInput(detected.name);
-          setCachedLocation(detected);
+          // Double check again before setting to prevent race condition overwriting
+          const currentSelection = getCachedLocation();
+          if (!currentSelection) {
+            setLocation(detected.name);
+            setLatitude(detected.latitude);
+            setLongitude(detected.longitude);
+            setLocationInput(detected.name);
+            setCachedLocation(detected);
+          }
         }
       } catch (err) {
         console.warn('Auto location detection failed:', err);

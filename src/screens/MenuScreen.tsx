@@ -4,10 +4,14 @@ import { useTheme } from '../theme/ThemeContext';
 import { Typography } from '../components/Typography';
 import { PremiumCard } from '../components/PremiumCard';
 import { AppHeader } from '../components/AppHeader';
-import { Moon, Compass, Sun, Globe, Bell, MapPin, Sparkles, ChevronRight, HelpCircle, Shield, Info, Smartphone, Check, Heart, Grid } from 'lucide-react-native';
+import { Moon, Compass, Sun, Globe, Bell, MapPin, Sparkles, ChevronRight, HelpCircle, Shield, Info, Smartphone, Check, Heart, Grid, LogOut } from 'lucide-react-native';
+import { useAuth } from '../services/AuthContext';
+
 
 export const MenuScreen = ({ navigation }: any) => {
   const { colors, isDark, themeMode, setThemeMode, userOverride, setSystemDefault } = useTheme();
+  const { userProfile, logout } = useAuth();
+
 
   const themeOptions: { id: 'light' | 'dark' | 'crimsonLight'; name: string; desc: string; primaryColor: string }[] = [
     { id: 'light', name: 'Gold Light', desc: 'Classic Gold Light Theme', primaryColor: '#D4AF37' },
@@ -49,11 +53,45 @@ export const MenuScreen = ({ navigation }: any) => {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <AppHeader 
-        title="Menu & Settings" 
-        subtitle="Vedic Utilities & Preferences"
+        title="Vedic Panchangam" 
+        subtitle="Menu & Settings"
+        onBackPress={navigation?.canGoBack() ? () => navigation.goBack() : undefined}
       />
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {/* User Profile Info Card */}
+        {userProfile && (
+          <PremiumCard style={styles.profileCard}>
+            <View style={styles.profileRow}>
+              <View style={[styles.avatar, { backgroundColor: colors.primary + '18' }]}>
+                <Typography variant="subtitle" weight="bold" style={{ color: colors.primary }}>
+                  {userProfile.displayName ? userProfile.displayName.charAt(0).toUpperCase() : 'U'}
+                </Typography>
+              </View>
+              <View style={styles.profileDetails}>
+                <Typography variant="body" weight="bold">
+                  {userProfile.displayName}
+                </Typography>
+                <Typography variant="caption" color="muted">
+                  {userProfile.email}
+                </Typography>
+                <View style={[styles.roleBadge, { backgroundColor: colors.primary + '10', borderColor: colors.primary + '30' }]}>
+                  <Typography variant="caption" weight="bold" style={{ color: colors.primary, fontSize: 10 }}>
+                    {userProfile.role.toUpperCase()}
+                  </Typography>
+                </View>
+              </View>
+              <TouchableOpacity 
+                style={[styles.signOutBtn, { backgroundColor: isDark ? '#1E1E26' : '#E2E8F0' }]} 
+                onPress={logout}
+                activeOpacity={0.7}
+              >
+                <LogOut color={colors.text} size={16} />
+              </TouchableOpacity>
+            </View>
+          </PremiumCard>
+        )}
+
         {/* Theme Selection Card */}
         <PremiumCard style={styles.themeCard}>
           <Typography variant="body" weight="semibold" style={{ marginBottom: 4 }}>
@@ -165,6 +203,39 @@ const styles = StyleSheet.create({
   },
   themeCard: {
     marginBottom: 28,
+  },
+  profileCard: {
+    marginBottom: 24,
+  },
+  profileRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  profileDetails: {
+    flex: 1,
+  },
+  roleBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    marginTop: 4,
+  },
+  signOutBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   themeGrid: {
     gap: 10,

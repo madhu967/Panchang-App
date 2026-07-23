@@ -114,6 +114,7 @@ export const getCurrentLocationByIp = async (): Promise<LocationItem | null> => 
 };
 
 let cachedLocation: LocationItem | null = null;
+let cachedDate: string | null = null;
 
 export const setCachedLocation = (loc: LocationItem) => {
   cachedLocation = loc;
@@ -121,6 +122,14 @@ export const setCachedLocation = (loc: LocationItem) => {
 
 export const getCachedLocation = (): LocationItem | null => {
   return cachedLocation;
+};
+
+export const setCachedDate = (date: string) => {
+  cachedDate = date;
+};
+
+export const getCachedDate = (): string | null => {
+  return cachedDate;
 };
 
 

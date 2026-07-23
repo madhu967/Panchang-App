@@ -3,13 +3,14 @@ import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeContext';
 import { Typography } from './Typography';
-import { Menu, Moon, Sun } from 'lucide-react-native';
+import { Menu, Moon, Sun, ChevronLeft } from 'lucide-react-native';
 
 interface AppHeaderProps {
   title: string;
   subtitle?: string;
   onMenuPress?: () => void;
   showThemeToggle?: boolean;
+  onBackPress?: () => void;
 }
 
 export const AppHeader: React.FC<AppHeaderProps> = ({
@@ -17,6 +18,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   subtitle,
   onMenuPress,
   showThemeToggle = true,
+  onBackPress,
 }) => {
   const insets = useSafeAreaInsets();
   const { colors, isDark, toggleTheme } = useTheme();
@@ -37,6 +39,16 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
       ]}
     >
       <View style={styles.contentRow}>
+        {onBackPress && (
+          <TouchableOpacity 
+            style={[styles.backButton, { backgroundColor: iconBgColor }]} 
+            onPress={onBackPress}
+            activeOpacity={0.7}
+          >
+            <ChevronLeft color={textColor} size={22} />
+          </TouchableOpacity>
+        )}
+
         <View style={styles.titleContainer}>
           <Typography 
             variant="display" 
@@ -126,5 +138,13 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.12)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  backButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
   },
 });
