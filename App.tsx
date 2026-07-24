@@ -12,6 +12,8 @@ import { AuthProvider, useAuth } from './src/services/AuthContext';
 import { AuthScreen } from './src/screens/AuthScreen';
 import { StatusScreen } from './src/screens/StatusScreen';
 import { AdminDashboardScreen } from './src/screens/AdminDashboardScreen';
+import { VedicChatbot } from './src/components/VedicChatbot';
+import { NavigationContainer } from '@react-navigation/native';
 
 
 import { 
@@ -33,6 +35,7 @@ const MainAppContent = () => {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <AppNavigator />
+      <VedicChatbot />
 
       {/* Splash Screen overlay matching active theme */}
       {showSplash && (
@@ -63,7 +66,9 @@ export default function App() {
     <SafeAreaProvider>
       <ThemeProvider>
         <AuthProvider>
-          <MainAppContent />
+          <NavigationContainer>
+            <MainAppContent />
+          </NavigationContainer>
         </AuthProvider>
       </ThemeProvider>
     </SafeAreaProvider>

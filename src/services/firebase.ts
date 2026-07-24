@@ -1,8 +1,9 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAnalytics, isSupported } from "firebase/analytics";
-import { initializeAuth, getReactNativePersistence, getAuth } from "firebase/auth";
+import { getAuth, initializeAuth, browserLocalPersistence } from "firebase/auth";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getFirestore } from "firebase/firestore";
+import { Platform } from 'react-native';
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -19,14 +20,27 @@ const firebaseConfig = {
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
 let auth: any;
-try {
-  const persistence = getReactNativePersistence(AsyncStorage);
-  auth = initializeAuth(app, {
-    persistence
-  });
-} catch (error) {
-  console.warn("Firebase Auth AsyncStorage persistence init failed, falling back to memory:", error);
-  auth = getAuth(app);
+
+if (Platform.OS === 'web') {
+  try {
+    auth = initializeAuth(app, {
+      persistence: browserLocalPersistence
+    });
+    console.log("Firebase Auth initialized with browserLocalPersistence (Web).");
+  } catch (error) {
+    auth = getAuth(app);
+  }
+} else {
+  try {
+    const { getReactNativePersistence } = require('firebase/auth/react-native');
+    auth = initializeAuth(app, {
+      persistence: getReactNativePersistence(AsyncStorage)
+    });
+    console.log("Firebase Auth initialized with getReactNativePersistence (Mobile).");
+  } catch (error) {
+    console.warn("Firebase Auth AsyncStorage persistence init failed, falling back:", error);
+    auth = getAuth(app);
+  }
 }
 
 const db = getFirestore(app);

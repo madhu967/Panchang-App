@@ -1,6 +1,5 @@
 // Trigger Metro reload to resolve new screen files
 import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { View, StyleSheet, Platform, Text, ActivityIndicator } from 'react-native';
@@ -257,15 +256,13 @@ const TabNavigator = () => {
 
 export const AppNavigator = () => {
   return (
-    <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="Main" component={TabNavigator} />
-        <Stack.Screen name="DailyHoroscope" component={DailyHoroscopeScreen} />
-        <Stack.Screen name="Numerology" component={NumerologyScreen} />
-        <Stack.Screen name="KundaliChart" component={KundaliChartScreen} />
-        <Stack.Screen name="Menu" component={MenuScreen} />
-      </Stack.Navigator>
-    </NavigationContainer>
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="Main" component={TabNavigator} />
+      <Stack.Screen name="DailyHoroscope" component={DailyHoroscopeScreen} />
+      <Stack.Screen name="Numerology" component={NumerologyScreen} />
+      <Stack.Screen name="KundaliChart" component={KundaliChartScreen} />
+      <Stack.Screen name="Menu" component={MenuScreen} />
+    </Stack.Navigator>
   );
 };
 

@@ -78,13 +78,16 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     try {
       if (typeof window !== 'undefined' && window.localStorage) {
         window.localStorage.setItem(THEME_STORAGE_KEY, mode);
+        return; // Bypass AsyncStorage on Web
       }
     } catch (e) {}
 
     try {
       await AsyncStorage.setItem(THEME_STORAGE_KEY, mode);
-    } catch (e) {
-      console.warn('Failed to save theme preference:', e);
+    } catch (e: any) {
+      if (!e?.message?.includes('Native module is null')) {
+        console.warn('Failed to save theme preference:', e);
+      }
     }
   };
 
@@ -101,13 +104,16 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     try {
       if (typeof window !== 'undefined' && window.localStorage) {
         window.localStorage.removeItem(THEME_STORAGE_KEY);
+        return; // Bypass AsyncStorage on Web
       }
     } catch (e) {}
 
     try {
       await AsyncStorage.removeItem(THEME_STORAGE_KEY);
-    } catch (e) {
-      console.warn('Failed to reset theme preference:', e);
+    } catch (e: any) {
+      if (!e?.message?.includes('Native module is null')) {
+        console.warn('Failed to reset theme preference:', e);
+      }
     }
   };
 

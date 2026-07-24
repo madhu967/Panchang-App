@@ -8,7 +8,7 @@ import { AnimatedVedicFooter } from '../components/AnimatedVedicFooter';
 import { HomeCarouselCard } from '../components/HomeCarouselCard';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Menu, Sun, Moon, Calendar as CalendarIcon, MapPin, Compass, Search, Navigation, Sparkles, Star, ChevronRight, ChevronLeft, X, ArrowRight, ShieldCheck, Home, Heart } from 'lucide-react-native';
-import { searchLocationSuggestions, LocationItem, getCurrentLocationByIp, setCachedLocation, getCachedLocation, setCachedDate } from '../services/locationService';
+import { searchLocationSuggestions, LocationItem, getCurrentLocationByIp, setCachedLocation, getCachedLocation, setCachedDate, loadStoredLocation } from '../services/locationService';
 import { getSunriseTime, getSunsetTime } from '../services/vedAstroApi';
 
 const { width } = Dimensions.get('window');
@@ -104,34 +104,40 @@ export const HomeScreen = ({ navigation }: any) => {
   const [isSearchingLocation, setIsSearchingLocation] = useState(false);
   const [isDetectingLocation, setIsDetectingLocation] = useState(false);
 
-  // Auto-detect location on startup
+  // Load stored location or auto-detect on startup
   useEffect(() => {
-    const autoDetect = async () => {
-      // If user has already selected a location manually, do not overwrite it
-      const current = getCachedLocation();
-      if (current) return;
-
+    const initializeLocation = async () => {
       setIsDetectingLocation(true);
       try {
+        // 1. Try to load from AsyncStorage first
+        const stored = await loadStoredLocation();
+        if (stored) {
+          setLocation(stored.name);
+          setLatitude(stored.latitude);
+          setLongitude(stored.longitude);
+          setLocationInput(stored.name);
+          return;
+        }
+
+        // 2. Fall back to IP Geolocation if no stored location
         const detected = await getCurrentLocationByIp();
         if (detected) {
-          // Double check again before setting to prevent race condition overwriting
           const currentSelection = getCachedLocation();
           if (!currentSelection) {
             setLocation(detected.name);
             setLatitude(detected.latitude);
             setLongitude(detected.longitude);
             setLocationInput(detected.name);
-            setCachedLocation(detected);
+            await setCachedLocation(detected);
           }
         }
       } catch (err) {
-        console.warn('Auto location detection failed:', err);
+        console.warn('Location initialization failed:', err);
       } finally {
         setIsDetectingLocation(false);
       }
     };
-    autoDetect();
+    initializeLocation();
   }, []);
 
   // Debounced location search effect
