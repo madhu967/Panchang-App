@@ -21,25 +21,38 @@ const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
 let auth: any;
 
-if (Platform.OS === 'web') {
-  try {
-    auth = initializeAuth(app, {
-      persistence: browserLocalPersistence
-    });
-    console.log("Firebase Auth initialized with browserLocalPersistence (Web).");
-  } catch (error) {
-    auth = getAuth(app);
-  }
+if ((app as any)._authInitialized) {
+  auth = getAuth(app);
 } else {
-  try {
-    const { getReactNativePersistence } = require('firebase/auth/react-native');
-    auth = initializeAuth(app, {
-      persistence: getReactNativePersistence(AsyncStorage)
-    });
-    console.log("Firebase Auth initialized with getReactNativePersistence (Mobile).");
-  } catch (error) {
-    console.warn("Firebase Auth AsyncStorage persistence init failed, falling back:", error);
-    auth = getAuth(app);
+  if (Platform.OS === 'web') {
+    try {
+      auth = initializeAuth(app, {
+        persistence: browserLocalPersistence
+      });
+      (app as any)._authInitialized = true;
+      console.log("Firebase Auth initialized with browserLocalPersistence (Web).");
+    } catch (error: any) {
+      console.warn("Firebase Auth browserLocalPersistence init failed, falling back:", error);
+      auth = getAuth(app);
+      if (error?.code === 'auth/already-initialized' || String(error).includes('already-initialized')) {
+        (app as any)._authInitialized = true;
+      }
+    }
+  } else {
+    try {
+      const { getReactNativePersistence } = require('firebase/auth/react-native');
+      auth = initializeAuth(app, {
+        persistence: getReactNativePersistence(AsyncStorage)
+      });
+      (app as any)._authInitialized = true;
+      console.log("Firebase Auth initialized with getReactNativePersistence (Mobile).");
+    } catch (error: any) {
+      console.warn("Firebase Auth AsyncStorage persistence init failed, falling back:", error);
+      auth = getAuth(app);
+      if (error?.code === 'auth/already-initialized' || String(error).includes('already-initialized')) {
+        (app as any)._authInitialized = true;
+      }
+    }
   }
 }
 

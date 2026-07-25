@@ -20,7 +20,6 @@ let cachedStatus: { uid: string; role: string; status: string; timestamp: number
 
 const checkAccessAndBlock = async (url: string): Promise<boolean> => {
   const isAstrologyApi = url.includes('vedastro.org') || 
-                        url.includes('api.navamsha.in') || 
                         url.includes('horoscope') ||
                         url.includes('api.vedastro.org');
 
@@ -29,7 +28,7 @@ const checkAccessAndBlock = async (url: string): Promise<boolean> => {
   // Allow basic astronomical and public requests to bypass login restrictions
   const isPublicApi = url.includes('/SunriseTime') || 
                        url.includes('/SunsetTime') ||
-                       url.includes('/astrology/panchang/advanced') ||
+                       url.includes('/PanchangaTable') ||
                        url.includes('freehoroscopeapi.com');
   if (isPublicApi) return true;
 
@@ -116,13 +115,7 @@ const axios = {
     if (url.includes('vedastro.org') && process.env.EXPO_PUBLIC_VEDASTRO_API_KEY) {
       requestHeaders['x-api-key'] = process.env.EXPO_PUBLIC_VEDASTRO_API_KEY;
     }
-    if (url.includes('api.navamsha.in')) {
-      const apiKey = process.env.EXPO_PUBLIC_NAVAMSHA_API_KEY;
-      if (apiKey) {
-        requestHeaders['X-API-Key'] = apiKey;
-      }
-      requestHeaders['Accept'] = 'application/json';
-    }
+
 
     try {
       const response = await fetch(url, {
@@ -187,13 +180,7 @@ const axios = {
     if (url.includes('vedastro.org') && process.env.EXPO_PUBLIC_VEDASTRO_API_KEY) {
       requestHeaders['x-api-key'] = process.env.EXPO_PUBLIC_VEDASTRO_API_KEY;
     }
-    if (url.includes('api.navamsha.in')) {
-      const apiKey = process.env.EXPO_PUBLIC_NAVAMSHA_API_KEY;
-      if (apiKey) {
-        requestHeaders['X-API-Key'] = apiKey;
-      }
-      requestHeaders['Accept'] = 'application/json';
-    }
+
 
     try {
       const response = await fetch(url, {

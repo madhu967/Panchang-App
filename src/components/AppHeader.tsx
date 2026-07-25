@@ -11,6 +11,8 @@ interface AppHeaderProps {
   onMenuPress?: () => void;
   showThemeToggle?: boolean;
   onBackPress?: () => void;
+  rightIcon?: any;
+  onRightPress?: () => void;
 }
 
 export const AppHeader: React.FC<AppHeaderProps> = ({
@@ -19,6 +21,8 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   onMenuPress,
   showThemeToggle = true,
   onBackPress,
+  rightIcon,
+  onRightPress,
 }) => {
   const insets = useSafeAreaInsets();
   const { colors, isDark, toggleTheme } = useTheme();
@@ -67,6 +71,16 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
         </View>
 
         <View style={styles.actionRow}>
+          {rightIcon && onRightPress && (
+            <TouchableOpacity 
+              style={[styles.iconButton, { marginRight: 10, backgroundColor: iconBgColor }]} 
+              onPress={onRightPress}
+              activeOpacity={0.7}
+            >
+              {React.createElement(rightIcon, { color: textColor, size: 20 })}
+            </TouchableOpacity>
+          )}
+
           {showThemeToggle && (
             <TouchableOpacity 
               style={[styles.iconButton, { backgroundColor: iconBgColor }]} 

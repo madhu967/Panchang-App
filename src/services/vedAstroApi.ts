@@ -273,16 +273,81 @@ export const getPanchangaTable = async (
   longitude: number,
   locationName: string
 ): Promise<any> => {
-  const dateFormatted = formatDateToDDMMYYYY(date);
-  
-  // Format coordinates cleanly
-  const latClean = Number(latitude || 28.6139).toFixed(4);
-  const lngClean = Number(longitude || 77.2090).toFixed(4);
-  
-  const url = `https://api.vedastro.org/api/Calculate/PanchangaTable/Location/${latClean},${lngClean}/Time/12:00/${dateFormatted}/+05:30/Ayanamsa/RAMAN`;
+  let d: Date;
+  if (!date) {
+    d = new Date();
+  } else if (date instanceof Date) {
+    d = date;
+  } else {
+    // Try standard parsing. Support "23 Jul 2026", "23-07-2026", "2026-07-23"
+    const cleanStr = String(date).trim();
+    const parsed = new Date(cleanStr);
+    if (!isNaN(parsed.getTime())) {
+      d = parsed;
+    } else {
+      // Manual parse for space separated formats e.g. "23 Jul 2026"
+      const spaceParts = cleanStr.split(/\s+/);
+      if (spaceParts.length === 3) {
+        const day = parseInt(spaceParts[0].replace(/[^0-9]/g, ''), 10);
+        const monthStr = spaceParts[1].toLowerCase();
+        const year = parseInt(spaceParts[2], 10);
+        const monthsMap: Record<string, number> = {
+          jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+          jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
+          january: 0, february: 1, march: 2, april: 3, june: 5,
+          july: 6, august: 7, september: 8, october: 9, november: 10, december: 11
+        };
+        const month = monthsMap[monthStr] !== undefined ? monthsMap[monthStr] : 6;
+        d = new Date(year, month, day);
+      } else {
+        d = new Date();
+      }
+    }
+  }
+
+  // Calculate timezone offset from longitude (Bhimavaram is 81.52 -> +05:26)
+  let tzOffset = '+05:30'; // Default to Indian Standard Time
+  if (longitude !== undefined && longitude !== null && !isNaN(Number(longitude))) {
+    const longNum = Number(longitude);
+    const offsetHours = longNum / 15;
+    const totalMins = Math.round(offsetHours * 60);
+    const sign = totalMins >= 0 ? '+' : '-';
+    const absMins = Math.abs(totalMins);
+    const h = String(Math.floor(absMins / 60)).padStart(2, '0');
+    const m = String(absMins % 60).padStart(2, '0');
+    tzOffset = `${sign}${h}:${m}`;
+  }
+
+  const hours = String(d.getHours() || 6).padStart(2, '0');
+  const minutes = String(d.getMinutes() || 0).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+
+  const stdTimeStr = `${hours}:${minutes} ${day}/${month}/${year} ${tzOffset}`;
+
+  const payload = {
+    InputTime: {
+      StdTime: stdTimeStr,
+      Location: {
+        Name: locationName || 'Bhimavaram, Andhra Pradesh, India',
+        Latitude: (latitude !== undefined && latitude !== null && !isNaN(Number(latitude))) ? Number(latitude) : 16.561,
+        Longitude: (longitude !== undefined && longitude !== null && !isNaN(Number(longitude))) ? Number(longitude) : 81.52,
+      }
+    },
+    Ayanamsa: 'LAHIRI'
+  };
+
+  const url = 'https://api.vedastro.org/api/Calculate/PanchangaTable';
 
   try {
-    const response = await axios.get(url, { timeout: 12000 });
+    console.log(`[VedAstro API] POST ${url} with payload:`, JSON.stringify(payload));
+    const response = await axios.post(url, payload, {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      timeout: 30000,
+    });
     return response.data;
   } catch (error: any) {
     console.error('VedAstro getPanchangaTable Error:', error?.response?.data || error.message || error);

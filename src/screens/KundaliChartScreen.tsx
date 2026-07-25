@@ -893,7 +893,7 @@ export const KundaliChartScreen = ({ navigation }: any) => {
                     }}
                   >
                     <View style={{ flex: 1 }}>
-                      <Typography variant="body" weight={isSelected ? "bold" : "semibold"} color={isSelected ? "primary" : "text"}>
+                      <Typography variant="body" weight={isSelected ? "bold" : "semibold"} color={isSelected ? "primary" : "default"}>
                         {item.label}
                       </Typography>
                       <Typography variant="caption" color="muted" style={{ marginTop: 2 }}>
@@ -935,7 +935,7 @@ export const KundaliChartScreen = ({ navigation }: any) => {
                       setShowAyanamsaModal(false);
                     }}
                   >
-                    <Typography variant="body" weight={isSelected ? "bold" : "semibold"} color={isSelected ? "primary" : "text"}>
+                    <Typography variant="body" weight={isSelected ? "bold" : "semibold"} color={isSelected ? "primary" : "default"}>
                       {item.label} System
                     </Typography>
                   </TouchableOpacity>
