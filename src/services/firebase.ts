@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAnalytics, isSupported } from "firebase/analytics";
-import { getAuth, initializeAuth, browserLocalPersistence } from "firebase/auth";
+import { getAuth, initializeAuth, browserLocalPersistence, getReactNativePersistence } from "firebase/auth";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getFirestore } from "firebase/firestore";
 import { Platform } from 'react-native';
@@ -40,7 +40,6 @@ if ((app as any)._authInitialized) {
     }
   } else {
     try {
-      const { getReactNativePersistence } = require('firebase/auth/react-native');
       auth = initializeAuth(app, {
         persistence: getReactNativePersistence(AsyncStorage)
       });
