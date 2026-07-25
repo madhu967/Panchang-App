@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, ScrollView, StyleSheet, SafeAreaView, TouchableOpacity, Dimensions, TextInput, Modal, ActivityIndicator, FlatList } from 'react-native';
+import { View, ScrollView, StyleSheet, SafeAreaView, TouchableOpacity, Dimensions, TextInput, Modal, ActivityIndicator, FlatList, ImageBackground } from 'react-native';
 import { useTheme } from '../theme/ThemeContext';
 import { Typography } from '../components/Typography';
 import { PremiumCard } from '../components/PremiumCard';
 import { AppHeader } from '../components/AppHeader';
 import { AnimatedVedicFooter } from '../components/AnimatedVedicFooter';
-import { HomeCarouselCard } from '../components/HomeCarouselCard';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Menu, Sun, Moon, Calendar as CalendarIcon, MapPin, Compass, Search, Navigation, Sparkles, Star, ChevronRight, ChevronLeft, X, ArrowRight, ShieldCheck, Home, Heart } from 'lucide-react-native';
 import { searchLocationSuggestions, LocationItem, getCurrentLocationByIp, setCachedLocation, getCachedLocation, setCachedDate, loadStoredLocation } from '../services/locationService';
@@ -19,9 +18,7 @@ const CAROUSEL_ITEMS = [
     title: "Today's Panchang",
     subtitle: 'Shukla Dashami • Vishakha Nakshatra',
     tag: 'Auspicious Almanac',
-    gradient: ['#7A1124', '#D4AF37', '#FF9933'],
-    accentColor: '#FFD700',
-    icon: Sun,
+    image: require('../../assets/pexels-renato-calsavara-51671778-8148893.jpg'),
     navTarget: 'Panchang',
     ctaText: 'View Panchang',
   },
@@ -30,9 +27,7 @@ const CAROUSEL_ITEMS = [
     title: 'Upcoming Festivals',
     subtitle: 'Devshayani Ekadashi • In 4 Days',
     tag: 'Holy Fast & Puja',
-    gradient: ['#2E0854', '#6B21A8', '#A855F7'],
-    accentColor: '#C084FC',
-    icon: Moon,
+    image: require('../../assets/pexels-kaip-1341279.jpg'),
     navTarget: 'Festivals',
     ctaText: 'Explore Festivals',
   },
@@ -41,9 +36,7 @@ const CAROUSEL_ITEMS = [
     title: 'Good Muhurtham Today',
     subtitle: 'Abhijit Muhurat: 11:54 AM - 12:48 PM',
     tag: 'Best Divine Timing',
-    gradient: ['#064E3B', '#047857', '#10B981'],
-    accentColor: '#34D399',
-    icon: Sparkles,
+    image: require('../../assets/pexels-frank-cone-140140-3607542.jpg'),
     navTarget: 'Panchang',
     ctaText: 'Check Timings',
   },
@@ -52,9 +45,7 @@ const CAROUSEL_ITEMS = [
     title: 'Daily Rashiphal',
     subtitle: 'Moon in Libra • High Spiritual Energy',
     tag: 'Vedic Predictions',
-    gradient: ['#881337', '#E11D48', '#FB923C'],
-    accentColor: '#FDBA74',
-    icon: Star,
+    image: require('../../assets/pexels-scott-lord-564881271-37761980.jpg'),
     navTarget: 'Menu',
     ctaText: 'Read Rashiphal',
   },
@@ -199,6 +190,23 @@ export const HomeScreen = ({ navigation }: any) => {
     navigation.navigate('Panchang', { location, latitude, longitude, date });
   };
 
+  const handleNextSlide = () => {
+    setActiveSlide((prev) => (prev === CAROUSEL_ITEMS.length - 1 ? 0 : prev + 1));
+  };
+
+  const handlePrevSlide = () => {
+    setActiveSlide((prev) => (prev === 0 ? CAROUSEL_ITEMS.length - 1 : prev - 1));
+  };
+
+  const handleCardPress = () => {
+    const item = CAROUSEL_ITEMS[activeSlide];
+    if (item.navTarget === 'Panchang') {
+      navigation.navigate('Panchang', { location, latitude, longitude, date });
+    } else {
+      navigation.navigate(item.navTarget as any);
+    }
+  };
+
   const selectLocationItem = (item: LocationItem) => {
     setLocation(item.name);
     setLatitude(item.latitude);
@@ -206,6 +214,43 @@ export const HomeScreen = ({ navigation }: any) => {
     setLocationInput(item.name);
     setCachedLocation(item);
     setShowLocationModal(false);
+  };
+
+  const getCosmicGreeting = () => {
+    const hours = new Date().getHours();
+    if (hours >= 5 && hours < 12) {
+      return {
+        title: "Auspicious Morning ✨",
+        subtitle: "May the morning Sun bring clarity, peace, and spiritual growth to your path today.",
+        icon: Sun,
+        iconColor: '#EA580C',
+        bgColor: isDark ? 'rgba(234, 88, 12, 0.15)' : '#FFF7ED',
+      };
+    } else if (hours >= 12 && hours < 17) {
+      return {
+        title: "Blessed Afternoon ☀️",
+        subtitle: "As the Sun reaches its peak, may your energy remain aligned with the cosmic flow.",
+        icon: Sun,
+        iconColor: '#D4AF37',
+        bgColor: isDark ? 'rgba(212, 175, 55, 0.15)' : '#FEF3C7',
+      };
+    } else if (hours >= 17 && hours < 21) {
+      return {
+        title: "Serene Evening 🌅",
+        subtitle: "A time for gratitude and reflection. May the gentle evening stars bring calm to your mind.",
+        icon: Moon,
+        iconColor: '#F97316',
+        bgColor: isDark ? 'rgba(249, 115, 22, 0.15)' : '#FFF7ED',
+      };
+    } else {
+      return {
+        title: "Sacred Night 🌙",
+        subtitle: "As the universe rests under the moon's embrace, find peace in the quiet within.",
+        icon: Moon,
+        iconColor: '#A855F7',
+        bgColor: isDark ? 'rgba(168, 85, 247, 0.15)' : '#FAF5FF',
+      };
+    }
   };
 
   const calendarDays = React.useMemo(() => {
@@ -268,13 +313,120 @@ export const HomeScreen = ({ navigation }: any) => {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Welcome & Sunrise / Sunset Section */}
-        <View style={styles.welcomeSection}>
-          <Typography variant="title">Good Morning 🌞</Typography>
-          <Typography variant="body" color="muted" style={{ marginTop: 2 }}>
-            May your day be guided by divine cosmic wisdom.
-          </Typography>
+        {/* Unified Cosmic Image Slider Card with Swiping */}
+        <View style={styles.sliderContainer}>
+          <ScrollView
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            snapToInterval={width - 40}
+            snapToAlignment="center"
+            decelerationRate="fast"
+            onScroll={(event) => {
+              const offset = event.nativeEvent.contentOffset.x;
+              const slideWidth = width - 40;
+              const index = Math.round(offset / slideWidth);
+              if (index >= 0 && index < CAROUSEL_ITEMS.length && index !== activeSlide) {
+                setActiveSlide(index);
+              }
+            }}
+            scrollEventThrottle={16}
+            style={styles.sliderScrollView}
+          >
+            {CAROUSEL_ITEMS.map((item, idx) => (
+              <TouchableOpacity 
+                key={item.id}
+                activeOpacity={0.9} 
+                onPress={() => {
+                  if (item.navTarget === 'Panchang') {
+                    navigation.navigate('Panchang', { location, latitude, longitude, date });
+                  } else {
+                    navigation.navigate(item.navTarget as any);
+                  }
+                }}
+                style={[styles.sliderTouch, { width: width - 40 }]}
+              >
+                <ImageBackground 
+                  source={item.image} 
+                  style={styles.sliderBgImage}
+                  imageStyle={{ borderRadius: 24 }}
+                >
+                  {/* Semi-transparent dark overlay for high text contrast */}
+                  <View style={styles.sliderOverlay}>
+                    {/* Header Tag */}
+                    <View style={styles.sliderHeaderRow}>
+                      <View style={styles.sliderTag}>
+                        <Typography variant="caption" weight="semibold" style={{ color: '#FFD700', fontSize: 11, textTransform: 'uppercase', letterSpacing: 1 }}>
+                          {item.tag}
+                        </Typography>
+                      </View>
+                    </View>
 
+                    {/* Text Info & CTA */}
+                    <View style={styles.sliderContent}>
+                      <Typography variant="title" weight="bold" style={styles.sliderTitle}>
+                        {item.title}
+                      </Typography>
+                      <Typography variant="body" weight="medium" style={styles.sliderSubtitle}>
+                        {item.subtitle}
+                      </Typography>
+
+                      <View style={styles.sliderCtaRow}>
+                        <View style={styles.sliderCtaBtn}>
+                          <Typography variant="caption" weight="bold" style={{ color: '#FFFFFF' }}>
+                            {item.ctaText}
+                          </Typography>
+                          <ArrowRight color="#FFFFFF" size={14} style={{ marginLeft: 6 }} />
+                        </View>
+                      </View>
+                    </View>
+                  </View>
+                </ImageBackground>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          {/* Navigation Dots Indicator (Bottom Center) */}
+          <View style={styles.sliderDotsRow}>
+            {CAROUSEL_ITEMS.map((_, idx) => (
+              <View
+                key={idx}
+                style={[
+                  styles.sliderDot,
+                  idx === activeSlide && styles.sliderActiveDot
+                ]}
+              />
+            ))}
+          </View>
+        </View>
+
+        {/* Dynamic Cosmic Greeting Card */}
+        {(() => {
+          const greeting = getCosmicGreeting();
+          const GreetingIcon = greeting.icon;
+          return (
+            <PremiumCard style={styles.greetingCard}>
+              <View style={styles.greetingHeader}>
+                <View style={[styles.greetingIconBg, { backgroundColor: greeting.bgColor }]}>
+                  <GreetingIcon color={greeting.iconColor} size={16} />
+                </View>
+                <Typography variant="caption" color="muted" weight="bold" style={styles.greetingTag}>
+                  DAILY COSMIC BLESSING
+                </Typography>
+              </View>
+              
+              <Typography variant="title" weight="bold" style={[styles.greetingTitle, { color: isDark ? '#D4AF37' : colors.primary }]}>
+                {greeting.title}
+              </Typography>
+              <Typography variant="body" style={[styles.greetingText, { color: colors.textSecondary }]}>
+                {greeting.subtitle}
+              </Typography>
+            </PremiumCard>
+          );
+        })()}
+
+        {/* Sunrise / Sunset Section */}
+        <View style={styles.welcomeSection}>
           {/* Sunrise and Sunset times card */}
           <PremiumCard style={styles.sunTimeCard}>
             <View style={styles.sunTimeRow}>
@@ -330,48 +482,6 @@ export const HomeScreen = ({ navigation }: any) => {
               </View>
             </PremiumCard>
           </TouchableOpacity>
-        </View>
-
-        {/* Sliding Cards Carousel */}
-        <View style={styles.carouselSection}>
-          <ScrollView 
-            horizontal 
-            showsHorizontalScrollIndicator={false} 
-            snapToInterval={width - 64}
-            decelerationRate="fast"
-            onScroll={handleScroll}
-            scrollEventThrottle={16}
-            style={styles.carouselContainer}
-          >
-            {CAROUSEL_ITEMS.map((item) => (
-              <HomeCarouselCard
-                key={item.id}
-                item={item as any}
-                cardWidth={width - 80}
-                onPress={() => {
-                  if (item.navTarget === 'Panchang') {
-                    navigation.navigate('Panchang', { location, latitude, longitude, date });
-                  } else {
-                    navigation.navigate(item.navTarget);
-                  }
-                }}
-              />
-            ))}
-          </ScrollView>
-
-          {/* Pagination Indicators */}
-          <View style={styles.dotsContainer}>
-            {CAROUSEL_ITEMS.map((_, idx) => (
-              <View
-                key={idx}
-                style={[
-                  styles.dot,
-                  { backgroundColor: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.15)' },
-                  idx === activeSlide && [styles.activeDot, { backgroundColor: colors.primary }]
-                ]}
-              />
-            ))}
-          </View>
         </View>
 
         {/* Panchang Calculator Input Card */}
@@ -651,11 +761,129 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 20,
   },
+  sliderContainer: {
+    width: '100%',
+    marginBottom: 24,
+  },
+  sliderScrollView: {
+    width: '100%',
+    height: 230,
+  },
+  sliderTouch: {
+    borderRadius: 24,
+    overflow: 'hidden',
+    height: 230,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+  },
+  sliderBgImage: {
+    flex: 1,
+    justifyContent: 'space-between',
+  },
+  sliderOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    padding: 20,
+    justifyContent: 'space-between',
+  },
+  sliderHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  sliderTag: {
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  sliderContent: {
+    marginTop: 'auto',
+    marginBottom: 10,
+  },
+  sliderTitle: {
+    color: '#FFFFFF',
+    fontSize: 22,
+    fontWeight: 'bold',
+    marginBottom: 6,
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  sliderSubtitle: {
+    color: 'rgba(255, 255, 255, 0.85)',
+    fontSize: 14,
+    marginBottom: 14,
+  },
+  sliderCtaRow: {
+    flexDirection: 'row',
+  },
+  sliderCtaBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(212, 175, 55, 0.85)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+  },
+  sliderDotsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  sliderDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255, 255, 255, 0.35)',
+    marginHorizontal: 3,
+  },
+  sliderActiveDot: {
+    width: 18,
+    backgroundColor: '#D4AF37',
+  },
+  greetingCard: {
+    marginBottom: 16,
+    padding: 18,
+  },
+  greetingHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  greetingIconBg: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  greetingTag: {
+    marginLeft: 10,
+    fontSize: 10,
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+  },
+  greetingTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 6,
+  },
+  greetingText: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
   welcomeSection: {
     marginBottom: 24,
   },
   sunTimeCard: {
-    marginTop: 16,
+    marginTop: 12,
     paddingVertical: 14,
   },
   sunTimeRow: {
@@ -686,48 +914,6 @@ const styles = StyleSheet.create({
   todayRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-  },
-  carouselSection: {
-    marginBottom: 26,
-  },
-  carouselContainer: {
-    overflow: 'visible',
-  },
-  carouselCard: {
-    height: 160,
-  },
-  carouselGradient: {
-    flex: 1,
-    padding: 20,
-    justifyContent: 'space-between',
-  },
-  carouselHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  carouselTag: {
-    backgroundColor: 'rgba(0,0,0,0.25)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  dotsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 14,
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginHorizontal: 4,
-  },
-  activeDot: {
-    width: 24,
-    height: 8,
-    borderRadius: 4,
   },
   inputCard: {
     marginBottom: 24,

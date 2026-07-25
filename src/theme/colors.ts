@@ -15,16 +15,16 @@ export const colors = {
   },
   dark: {
     background: '#000000', // Pure OLED Black
-    surface: '#121212', // Dark card background
-    surfaceVariant: '#1E1E26',
-    primary: '#D4AF37', // Signature Gold
-    primaryGradient: ['#D4AF37', '#FF9933'],
-    secondary: '#FF9933', // Saffron
-    accent: '#FF9933',
-    text: '#FFFFFF', // Pure White
-    textSecondary: '#9CA3AF', // Muted Gray
-    border: '#26262D',
-    cardShadow: 'rgba(0,0,0,0.8)',
+    surface: '#111111', // Cards
+    surfaceVariant: '#1B1B1B', // Inputs, chips
+    primary: '#D4AF37', // Premium Gold
+    primaryGradient: ['#D4AF37', '#F4C542'],
+    secondary: '#FF9933', // Temple Saffron
+    accent: '#E53935', // Crimson Accent
+    text: '#FFFFFF', // White
+    textSecondary: '#A1A1AA', // Soft Gray
+    border: '#2A2A2A', // Card borders
+    cardShadow: 'rgba(0,0,0,0.85)',
     onPrimary: '#000000',
   },
   crimsonLight: {
