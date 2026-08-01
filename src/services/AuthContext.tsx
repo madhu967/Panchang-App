@@ -7,7 +7,8 @@ import {
   updatePassword as firebaseUpdatePassword,
   EmailAuthProvider,
   reauthenticateWithCredential,
-  User 
+  User,
+  deleteUser
 } from 'firebase/auth';
 import { 
   doc, 
@@ -288,13 +289,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // ───────────────────────────────────────────────────────────────────────
       const profileSnap = await getDocFromServer(doc(db, 'users', userCredential.user.uid));
       if (!profileSnap.exists()) {
-        // Account deleted — sign out immediately before onSnapshot can interfere
+        // Account deleted by admin.
+        // Since the user is currently authenticated (they just signed in),
+        // we have the necessary fresh token to delete their Firebase Auth account.
+        // This fully cleans up the system and allows them to register again.
+        try {
+          await deleteUser(userCredential.user);
+        } catch (e) {
+          console.warn('[Auth] Failed to delete orphaned Auth user:', e);
+        }
+        
         await safeStorage.removeItem('saved_user_credentials');
-        await signOut(auth);
+        await signOut(auth).catch(() => {});
         setLoading(false);
         throw {
           code: 'auth/account-deleted',
-          message: 'Your account has been deleted by the administrator. Please register again with a new email.'
+          message: 'Your account has been deleted by the administrator. Please register again.'
         };
       }
 

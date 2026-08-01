@@ -133,7 +133,7 @@ export const AuthScreen: React.FC = () => {
     } catch (error: any) {
       let errorMsg = 'An error occurred during authentication.';
       if (error.code === 'auth/account-deleted')         errorMsg = error.message;
-      else if (error.code === 'auth/email-already-in-use') errorMsg = error.message || 'This email is already registered. Please sign in instead.';
+      else if (error.code === 'auth/email-already-in-use') errorMsg = 'This email is already registered. If your account was deleted, please sign in with your old password first to clear it, then register again.';
       else if (error.code === 'auth/invalid-email')      errorMsg = 'Please enter a valid email address.';
       else if (error.code === 'auth/weak-password')      errorMsg = 'Password should be at least 6 characters.';
       else if (error.code === 'auth/invalid-credential') errorMsg = 'Invalid email or password. Please try again.';

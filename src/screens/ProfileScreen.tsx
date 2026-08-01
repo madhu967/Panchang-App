@@ -328,6 +328,27 @@ export const ProfileScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
             </View>
           </LinearGradient>
 
+          {/* Admin: Manage Users */}
+          {isAdmin && (
+            <PremiumCard style={styles.card}>
+              <Typography variant="body" weight="bold" style={{ marginBottom: 14, color: colors.primary }}>Admin Tools</Typography>
+              <TouchableOpacity
+                style={[styles.adminLink, { borderColor, backgroundColor: colors.primary + '08' }]}
+                onPress={() => navigation?.navigate('UserManagement')}
+                activeOpacity={0.7}
+              >
+                <View style={[editableStyles.iconWrapper, { backgroundColor: colors.primary + '20' }]}>
+                  <Users size={16} color={colors.primary} />
+                </View>
+                <View style={{ flex: 1, marginLeft: 14 }}>
+                  <Typography variant="body" weight="semibold">Manage Users</Typography>
+                  <Typography variant="caption" color="muted">Approve, reject, or suspend user accounts</Typography>
+                </View>
+                <ChevronRight size={18} color={mutedColor} />
+              </TouchableOpacity>
+            </PremiumCard>
+          )}
+
           {/* Non-editable info */}
           <PremiumCard style={styles.card}>
             <Typography variant="body" weight="bold" style={{ marginBottom: 14, color: colors.primary }}>Account Information</Typography>
@@ -462,27 +483,6 @@ export const ProfileScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
               </View>
             )}
           </PremiumCard>
-
-          {/* Admin: Manage Users */}
-          {isAdmin && (
-            <PremiumCard style={styles.card}>
-              <Typography variant="body" weight="bold" style={{ marginBottom: 14, color: colors.primary }}>Admin Tools</Typography>
-              <TouchableOpacity
-                style={[styles.adminLink, { borderColor, backgroundColor: colors.primary + '08' }]}
-                onPress={() => navigation?.navigate('UserManagement')}
-                activeOpacity={0.7}
-              >
-                <View style={[editableStyles.iconWrapper, { backgroundColor: colors.primary + '20' }]}>
-                  <Users size={16} color={colors.primary} />
-                </View>
-                <View style={{ flex: 1, marginLeft: 14 }}>
-                  <Typography variant="body" weight="semibold">Manage Users</Typography>
-                  <Typography variant="caption" color="muted">Approve, reject, or suspend user accounts</Typography>
-                </View>
-                <ChevronRight size={18} color={mutedColor} />
-              </TouchableOpacity>
-            </PremiumCard>
-          )}
 
           {/* Logout */}
           <TouchableOpacity
