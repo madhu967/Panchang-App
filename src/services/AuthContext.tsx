@@ -1,15 +1,20 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { 
   onAuthStateChanged, 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
   signOut, 
+  updatePassword as firebaseUpdatePassword,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
   User 
 } from 'firebase/auth';
 import { 
   doc, 
-  getDoc, 
+  getDoc,
+  getDocFromServer,
   setDoc, 
+  updateDoc,
   onSnapshot 
 } from 'firebase/firestore';
 import { Platform } from 'react-native';
@@ -21,6 +26,7 @@ export interface UserProfile {
   uid: string;
   email: string;
   displayName: string;
+  phoneNumber?: string;
   role: 'admin' | 'user';
   status: 'pending' | 'approved' | 'rejected' | 'suspended';
   createdAt: string;
@@ -31,8 +37,10 @@ interface AuthContextType {
   userProfile: UserProfile | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, displayName: string) => Promise<void>;
+  register: (email: string, password: string, displayName: string, phoneNumber?: string) => Promise<void>;
   logout: () => Promise<void>;
+  updateProfile: (data: { displayName?: string; phoneNumber?: string }) => Promise<void>;
+  updatePassword: (currentPassword: string, newPassword: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -164,6 +172,11 @@ const safeStorage = {
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  // isRegistering prevents onSnapshot from signing out a brand-new user
+  // BEFORE register() has a chance to call setDoc() and create the profile.
+  // Without this, onSnapshot fires with exists=false the instant Firebase Auth
+  // creates the account, and our deletion-guard code would sign them out immediately.
+  const isRegistering = useRef(false);
   const [user, setUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -215,42 +228,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         // Setup real-time listener for user profile document
-        unsubscribeProfile = onSnapshot(userDocRef, async (docSnap) => {
+        unsubscribeProfile = onSnapshot(userDocRef, (docSnap) => {
           if (docSnap.exists()) {
             setUserProfile(docSnap.data() as UserProfile);
             setLoading(false);
           } else {
-            // Document doesn't exist yet (e.g. user was created manually via console)
-            // Initialize user document in firestore
-            const isDefaultAdmin = currentUser.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
-            const initialProfile: UserProfile = {
-              uid: currentUser.uid,
-              email: currentUser.email || '',
-              displayName: currentUser.displayName || currentUser.email?.split('@')[0] || 'User',
-              role: isDefaultAdmin ? 'admin' : 'user',
-              status: isDefaultAdmin ? 'approved' : 'pending',
-              createdAt: new Date().toISOString()
-            };
-
-            try {
-              await setDoc(userDocRef, initialProfile);
-              setUserProfile(initialProfile);
-            } catch (err) {
-              console.error("Error creating user profile in Firestore:", err);
+            // Profile document is missing.
+            // GUARD: if we are mid-registration, onSnapshot fires BEFORE setDoc
+            // completes — do NOT sign the new user out. register() will create
+            // the doc and onSnapshot will fire again with exists=true.
+            if (isRegistering.current) {
+              setLoading(false);
+              return;
             }
+            // isRegistering is false → this is a deleted account trying to use the app.
+            // Sign them out immediately. Do this outside the callback to avoid
+            // async issues inside a synchronous onSnapshot handler.
+            console.warn('[Auth] Profile missing for active user — account deleted. Signing out.');
+            safeStorage.removeItem('saved_user_credentials').finally(() => {
+              signOut(auth).catch(() => {});
+            });
             setLoading(false);
           }
         }, (error) => {
-          console.error("User profile subscription error:", error);
+          console.error('User profile subscription error:', error);
           setLoading(false);
         });
       } else {
         setUser(null);
         setUserProfile(null);
-        
-        // Only set loading to false if we don't have saved credentials to prevent flickering
-        const savedCreds = await safeStorage.getItem('saved_user_credentials');
-        if (!savedCreds) {
+
+        try {
+          const savedCreds = await safeStorage.getItem('saved_user_credentials');
+          if (!savedCreds) {
+            setLoading(false);
+          }
+        } catch {
           setLoading(false);
         }
       }
@@ -265,8 +278,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (email: string, password: string) => {
     setLoading(true);
     try {
-      await signInWithEmailAndPassword(auth, email, password);
-      // Save credentials for manual session persistence backup
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      
+      // ── ROOT CAUSE FIX ─────────────────────────────────────────────────────
+      // MUST use getDocFromServer() — NOT getDoc().
+      // getDoc() reads from Firestore's local cache, which may still show the
+      // document as existing even AFTER admin deleted it. getDocFromServer()
+      // forces a fresh read from the server, guaranteeing up-to-date data.
+      // ───────────────────────────────────────────────────────────────────────
+      const profileSnap = await getDocFromServer(doc(db, 'users', userCredential.user.uid));
+      if (!profileSnap.exists()) {
+        // Account deleted — sign out immediately before onSnapshot can interfere
+        await safeStorage.removeItem('saved_user_credentials');
+        await signOut(auth);
+        setLoading(false);
+        throw {
+          code: 'auth/account-deleted',
+          message: 'Your account has been deleted by the administrator. Please register again with a new email.'
+        };
+      }
+
+      // Profile exists and verified from server — save credentials for persistent login
       await safeStorage.setItem('saved_user_credentials', JSON.stringify({ email, password }));
     } catch (error) {
       setLoading(false);
@@ -274,48 +306,90 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const register = async (email: string, password: string, displayName: string) => {
+  const register = async (email: string, password: string, displayName: string, phoneNumber?: string) => {
     setLoading(true);
+    // Set flag BEFORE creating the Firebase Auth user.
+    // This prevents the onSnapshot handler from signing out the new user
+    // during the window between createUserWithEmailAndPassword and setDoc.
+    isRegistering.current = true;
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const newUser = userCredential.user;
+      let newUser;
       
-      // Create user document in firestore
+      try {
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        newUser = userCredential.user;
+      } catch (createError: any) {
+        isRegistering.current = false;
+        if (createError.code === 'auth/email-already-in-use') {
+          setLoading(false);
+          throw {
+            code: 'auth/email-already-in-use',
+            message: 'This email is already registered. If your account was deleted, please use a different email address.'
+          };
+        }
+        throw createError;
+      }
+      
+      // Create Firestore profile — once this setDoc completes, onSnapshot will
+      // fire again with exists=true, picking up the profile correctly.
       const isDefaultAdmin = email.toLowerCase() === ADMIN_EMAIL.toLowerCase();
       const initialProfile: UserProfile = {
         uid: newUser.uid,
         email: email,
         displayName: displayName,
+        phoneNumber: phoneNumber || '',
         role: isDefaultAdmin ? 'admin' : 'user',
         status: isDefaultAdmin ? 'approved' : 'pending',
         createdAt: new Date().toISOString()
       };
 
       await setDoc(doc(db, 'users', newUser.uid), initialProfile);
+      // Profile doc created — safe to clear the registration guard
+      isRegistering.current = false;
       setUserProfile(initialProfile);
       
-      // Save credentials for manual session persistence backup
       await safeStorage.setItem('saved_user_credentials', JSON.stringify({ email, password }));
     } catch (error) {
+      isRegistering.current = false;
       setLoading(false);
       throw error;
     }
   };
 
   const logout = async () => {
-    setLoading(true);
     try {
-      await signOut(auth);
-      // Clear manual session persistence backup
+      // CRITICAL: Remove credentials BEFORE signOut.
+      // signOut triggers onAuthStateChanged(null) synchronously. If credentials
+      // still exist at that moment, the null handler thinks auto-login is pending
+      // and never sets loading=false — causing an infinite loading screen.
       await safeStorage.removeItem('saved_user_credentials');
+      await signOut(auth);
     } catch (error) {
+      // Always unblock UI on error
       setLoading(false);
       throw error;
     }
   };
 
+  const updateProfile = async (data: { displayName?: string; phoneNumber?: string }) => {
+    if (!user || !userProfile) throw new Error('Not logged in');
+    const userRef = doc(db, 'users', user.uid);
+    await updateDoc(userRef, { ...data });
+    setUserProfile({ ...userProfile, ...data });
+  };
+
+  const updatePassword = async (currentPassword: string, newPassword: string) => {
+    if (!user || !user.email) throw new Error('Not logged in');
+    // Re-authenticate the user first for security
+    const credential = EmailAuthProvider.credential(user.email, currentPassword);
+    await reauthenticateWithCredential(user, credential);
+    await firebaseUpdatePassword(user, newPassword);
+    // Update persisted credentials with new password
+    await safeStorage.setItem('saved_user_credentials', JSON.stringify({ email: user.email, password: newPassword }));
+  };
+
   return (
-    <AuthContext.Provider value={{ user, userProfile, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, userProfile, loading, login, register, logout, updateProfile, updatePassword }}>
       {children}
     </AuthContext.Provider>
   );

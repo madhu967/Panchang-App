@@ -1,8 +1,9 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAnalytics, isSupported } from "firebase/analytics";
-import { getAuth, initializeAuth, browserLocalPersistence, getReactNativePersistence } from "firebase/auth";
+import { getAuth, initializeAuth, getReactNativePersistence } from "firebase/auth";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getFirestore } from "firebase/firestore";
+import { getFunctions } from "firebase/functions";
 import { Platform } from 'react-native';
 
 // Your web app's Firebase configuration
@@ -47,19 +48,16 @@ if (Platform.OS === 'web' || typeof window !== 'undefined') {
 }
 
 const db = getFirestore(app);
+const functions = getFunctions(app);
 
 // Initialize Analytics conditionally (as it's only supported on Web in the JS SDK)
 let analytics: any = null;
 isSupported().then((supported) => {
   if (supported) {
     analytics = getAnalytics(app);
-    console.log("Firebase Analytics initialized successfully.");
-  } else {
-    console.log("Firebase Analytics is not supported in this environment.");
   }
-}).catch((err) => {
-  console.warn("Failed to initialize Firebase Analytics:", err);
-});
+}).catch(() => {});
 
-export { app, auth, db, analytics };
+export { app, auth, db, analytics, functions };
+
 

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useColorScheme, Appearance, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 import { colors, ThemeColors, ThemeMode } from './colors';
 import { typography } from './typography';
 import { spacing, layout } from './spacing';
@@ -62,11 +63,16 @@ const safeStorage = {
       if (val !== null) return val;
     } catch (e) {}
 
-    // 3. Try AsyncStorage (Mobile native)
+    // 3. Try SecureStore (Mobile native secure storage)
     try {
-      return await AsyncStorage.getItem(key);
+      return await SecureStore.getItemAsync(key);
     } catch (e) {
-      return null;
+      // 4. Try AsyncStorage (fallback for native mobile)
+      try {
+        return await AsyncStorage.getItem(key);
+      } catch (nativeErr) {
+        return null;
+      }
     }
   },
   setItem: async (key: string, value: string): Promise<void> => {
@@ -85,13 +91,19 @@ const safeStorage = {
       saved = true;
     } catch (e) {}
 
-    // 3. Try AsyncStorage
+    // 3. Try SecureStore (Mobile native secure storage)
     try {
-      await AsyncStorage.setItem(key, value);
+      await SecureStore.setItemAsync(key, value);
       saved = true;
-    } catch (e) {}
+    } catch (e) {
+      // 4. Try AsyncStorage (fallback for native mobile)
+      try {
+        await AsyncStorage.setItem(key, value);
+        saved = true;
+      } catch (nativeErr) {}
+    }
 
-    // 4. Fallback to memory storage
+    // 5. Fallback to memory storage
     if (!saved) {
       memoryStorage[key] = value;
     }
@@ -107,10 +119,15 @@ const safeStorage = {
     try {
       removeCookie(key);
     } catch (e) {}
-    // 3. Try AsyncStorage
+    // 3. Try SecureStore (Mobile native secure storage)
     try {
-      await AsyncStorage.removeItem(key);
-    } catch (e) {}
+      await SecureStore.deleteItemAsync(key);
+    } catch (e) {
+      // 4. Try AsyncStorage (fallback for native mobile)
+      try {
+        await AsyncStorage.removeItem(key);
+      } catch (nativeErr) {}
+    }
     delete memoryStorage[key];
   }
 };

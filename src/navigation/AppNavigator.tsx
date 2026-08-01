@@ -8,7 +8,6 @@ import { Home, Moon, Calendar as CalendarIcon, Flame, Menu, Heart, Sparkles, Log
 import { useAuth } from '../services/AuthContext';
 import { AuthScreen } from '../screens/AuthScreen';
 import { StatusScreen } from '../screens/StatusScreen';
-import { AdminDashboardScreen } from '../screens/AdminDashboardScreen';
 
 
 import { useTheme } from '../theme/ThemeContext';
@@ -22,11 +21,13 @@ import { MenuScreen } from '../screens/MenuScreen';
 import { DailyHoroscopeScreen } from '../screens/DailyHoroscopeScreen';
 import { NumerologyScreen } from '../screens/NumerologyScreen';
 import { KundaliChartScreen } from '../screens/KundaliChartScreen';
+import { ProfileScreen } from '../screens/ProfileScreen';
+import { UserManagementScreen } from '../screens/UserManagementScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
-const AccountWrapperScreen = () => {
+const AccountWrapperScreen = ({ navigation }: any) => {
   const { user, userProfile, loading } = useAuth();
   const { colors } = useTheme();
 
@@ -42,12 +43,9 @@ const AccountWrapperScreen = () => {
     return <AuthScreen />;
   }
 
-  if (userProfile?.role === 'admin') {
-    return <AdminDashboardScreen />;
-  }
-
-  if (userProfile?.status === 'approved') {
-    return <MenuScreen />;
+  // Both admin and user see their Profile page in the Account tab
+  if (userProfile?.role === 'admin' || userProfile?.status === 'approved') {
+    return <ProfileScreen navigation={navigation} />;
   }
 
   return <StatusScreen />;
@@ -262,6 +260,8 @@ export const AppNavigator = () => {
       <Stack.Screen name="Numerology" component={NumerologyScreen} />
       <Stack.Screen name="KundaliChart" component={KundaliChartScreen} />
       <Stack.Screen name="Menu" component={MenuScreen} />
+      <Stack.Screen name="Profile" component={ProfileScreen} />
+      <Stack.Screen name="UserManagement" component={UserManagementScreen} />
     </Stack.Navigator>
   );
 };
