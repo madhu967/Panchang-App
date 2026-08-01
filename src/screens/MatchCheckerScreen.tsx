@@ -31,9 +31,97 @@ import {
   Info,
   Sliders,
   User,
-  Compass
+  Compass,
+  Grid
 } from 'lucide-react-native';
 import { searchLocationSuggestions, LocationItem } from '../services/locationService';
+import { SvgXml } from 'react-native-svg';
+import { getSouthIndianChart } from '../services/vedAstroApi';
+
+const inlineSvgStyles = (rawSvg: string): string => {
+  if (!rawSvg) return '';
+
+  let processedSvg = rawSvg;
+
+  // Remove XML declarations, DOCTYPEs, and HTML comments
+  processedSvg = processedSvg.replace(/<\?xml[\s\S]*?\?>/gi, '');
+  processedSvg = processedSvg.replace(/<!DOCTYPE[\s\S]*?>/gi, '');
+  processedSvg = processedSvg.replace(/<!--[\s\S]*?-->/g, '');
+
+  // 1. Extract styles from style tags
+  const styleRegex = /<style[^>]*>([\s\S]*?)<\/style>/gi;
+  let styleMatch;
+  const classStyles: Record<string, Record<string, string>> = {};
+
+  while ((styleMatch = styleRegex.exec(rawSvg)) !== null) {
+    const styleContent = styleMatch[1].replace(/\/\*[\s\S]*?\*\//g, ''); // remove comments
+    
+    // Regex to match selector and block: Selector { Rules }
+    const ruleBlockRegex = /([^{]+)\{([^}]+)\}/g;
+    let ruleBlockMatch;
+    
+    while ((ruleBlockMatch = ruleBlockRegex.exec(styleContent)) !== null) {
+      const selectors = ruleBlockMatch[1].split(',');
+      const block = ruleBlockMatch[2];
+      
+      // Parse block declarations
+      const declarations = block.split(';');
+      const rules: Record<string, string> = {};
+      declarations.forEach(decl => {
+        const parts = decl.split(':');
+        if (parts.length === 2) {
+          const prop = parts[0].trim().toLowerCase();
+          const val = parts[1].trim();
+          if (prop && val) {
+            rules[prop] = val;
+          }
+        }
+      });
+      
+      // Map rules to each class found in the selectors
+      selectors.forEach(sel => {
+        const trimmedSel = sel.trim();
+        const classMatchRegex = /\.([a-zA-Z0-9_-]+)/g;
+        let classMatch;
+        while ((classMatch = classMatchRegex.exec(trimmedSel)) !== null) {
+          const className = classMatch[1];
+          classStyles[className] = { ...(classStyles[className] || {}), ...rules };
+        }
+      });
+    }
+  }
+
+  // 2. Fallback mappings for standard VedAstro D-charts in case stylesheet parsing fails
+  const fallbackStyles: Record<string, Record<string, string>> = {
+    K: { fill: '#fdfefd' },
+    L: { fill: '#ffffff' },
+    M: { fill: '#9e6b2b' },
+    N: { fill: '#fcfaf8' },
+    O: { fill: '#945f25' },
+    P: { fill: '#ad8957' }
+  };
+
+  // Merge fallbacks with parsed styles
+  const mergedStyles = { ...fallbackStyles, ...classStyles };
+
+  // 3. Replace class="..." with inline attributes
+  const classAttrRegex = /class=["']([a-zA-Z0-9_-]+)["']/g;
+  processedSvg = processedSvg.replace(classAttrRegex, (match, className) => {
+    const rules = mergedStyles[className];
+    if (rules) {
+      const inlineAttrs = Object.entries(rules)
+        .map(([prop, val]) => `${prop}="${val}"`)
+        .join(' ');
+      return inlineAttrs;
+    }
+    return match;
+  });
+
+  // 4. Strip the <style> tags completely to prevent react-native-svg parser crashes
+  processedSvg = processedSvg.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
+
+  return processedSvg;
+};
 
 const { width } = Dimensions.get('window');
 
@@ -384,6 +472,11 @@ export const MatchCheckerScreen = ({ navigation }: any) => {
   const [femaleRemedies, setFemaleRemedies] = useState<any>(null);
   const [resultTab, setResultTab] = useState<'match' | 'remedies'>('match');
   const [remedyPerson, setRemedyPerson] = useState<'male' | 'female'>('male');
+  const [maleD1Svg, setMaleD1Svg] = useState<string | null>(null);
+  const [maleD9Svg, setMaleD9Svg] = useState<string | null>(null);
+  const [femaleD1Svg, setFemaleD1Svg] = useState<string | null>(null);
+  const [femaleD9Svg, setFemaleD9Svg] = useState<string | null>(null);
+  const [chartD1D9Tab, setChartD1D9Tab] = useState<'d1' | 'd9'>('d1');
 
   // Result display states
   const [expandedPredictions, setExpandedPredictions] = useState<{ [key: string]: boolean }>({});
@@ -457,33 +550,113 @@ export const MatchCheckerScreen = ({ navigation }: any) => {
       return dateStr;
     };
 
+    const getTzOffset = (longitude: number) => {
+      if (longitude === undefined || longitude === null || isNaN(Number(longitude))) {
+        return '+05:30';
+      }
+      const longNum = Number(longitude);
+      const offsetHours = longNum / 15;
+      const totalMins = Math.round(offsetHours * 60);
+      const sign = totalMins >= 0 ? '+' : '-';
+      const absMins = Math.abs(totalMins);
+      const h = String(Math.floor(absMins / 60)).padStart(2, '0');
+      const m = String(absMins % 60).padStart(2, '0');
+      return `${sign}${h}:${m}`;
+    };
+
+    const buildStdTime = (dateStr: string, timeStr: string, lng: number) => {
+      const parts = dateStr.split('-');
+      if (parts.length !== 3) return '';
+      const [year, month, day] = parts;
+      return `${timeStr} ${day}/${month}/${year} ${getTzOffset(lng)}`;
+    };
+
     const d1 = formatDateToYYYYMMDD(maleDate);
     const d2 = formatDateToYYYYMMDD(femaleDate);
+    
+    const maleStdTime = buildStdTime(d1, maleTime, maleLng);
+    const femaleStdTime = buildStdTime(d2, femaleTime, femaleLng);
     
     const compatibilityUrl = `https://openkundali.com/api/v1/compatibility?date1=${d1}&time1=${maleTime}&lat1=${maleLat}&lon1=${maleLng}&date2=${d2}&time2=${femaleTime}&lat2=${femaleLat}&lon2=${femaleLng}`;
     const maleRemediesUrl = `https://openkundali.com/api/v1/remedies?date=${d1}&time=${maleTime}&lat=${maleLat}&lon=${maleLng}`;
     const femaleRemediesUrl = `https://openkundali.com/api/v1/remedies?date=${d2}&time=${femaleTime}&lat=${femaleLat}&lon=${femaleLng}`;
 
     try {
-      console.log('[OpenKundali API] Fetching compatibility and remedies in parallel...');
+      console.log('[OpenKundali & VedAstro] Fetching compatibility, remedies, and South Indian D1 & D9 charts in parallel...');
       
-      const [compatibilityRes, maleRemediesRes, femaleRemediesRes] = await Promise.all([
+      const [
+        compatibilityRes, 
+        maleRemediesRes, 
+        femaleRemediesRes, 
+        maleD1Res, 
+        maleD9Res, 
+        femaleD1Res, 
+        femaleD9Res
+      ] = await Promise.all([
         fetch(compatibilityUrl).then(r => r.ok ? r.json() : null),
         fetch(maleRemediesUrl).then(r => r.ok ? r.json() : null),
-        fetch(femaleRemediesUrl).then(r => r.ok ? r.json() : null)
+        fetch(femaleRemediesUrl).then(r => r.ok ? r.json() : null),
+        getSouthIndianChart({
+          Time: {
+            StdTime: maleStdTime,
+            Location: { Name: maleLocation || 'Bhimavaram, Andhra Pradesh, India', Latitude: Number(maleLat) || 16.561, Longitude: Number(maleLng) || 81.52 }
+          },
+          ChartType: 'RasiD1',
+          Ayanamsa: 'LAHIRI'
+        }).catch(err => {
+          console.warn('Male D1 chart fetch failed:', err);
+          return null;
+        }),
+        getSouthIndianChart({
+          Time: {
+            StdTime: maleStdTime,
+            Location: { Name: maleLocation || 'Bhimavaram, Andhra Pradesh, India', Latitude: Number(maleLat) || 16.561, Longitude: Number(maleLng) || 81.52 }
+          },
+          ChartType: 'NavamshaD9',
+          Ayanamsa: 'LAHIRI'
+        }).catch(err => {
+          console.warn('Male D9 chart fetch failed:', err);
+          return null;
+        }),
+        getSouthIndianChart({
+          Time: {
+            StdTime: femaleStdTime,
+            Location: { Name: femaleLocation || 'Bhimavaram, Andhra Pradesh, India', Latitude: Number(femaleLat) || 16.561, Longitude: Number(femaleLng) || 81.52 }
+          },
+          ChartType: 'RasiD1',
+          Ayanamsa: 'LAHIRI'
+        }).catch(err => {
+          console.warn('Female D1 chart fetch failed:', err);
+          return null;
+        }),
+        getSouthIndianChart({
+          Time: {
+            StdTime: femaleStdTime,
+            Location: { Name: femaleLocation || 'Bhimavaram, Andhra Pradesh, India', Latitude: Number(femaleLat) || 16.561, Longitude: Number(femaleLng) || 81.52 }
+          },
+          ChartType: 'NavamshaD9',
+          Ayanamsa: 'LAHIRI'
+        }).catch(err => {
+          console.warn('Female D9 chart fetch failed:', err);
+          return null;
+        })
       ]);
 
       if (compatibilityRes && compatibilityRes.ashtakoota) {
         setMatchData(compatibilityRes);
         setMaleRemedies(maleRemediesRes);
         setFemaleRemedies(femaleRemediesRes);
+        setMaleD1Svg(maleD1Res);
+        setMaleD9Svg(maleD9Res);
+        setFemaleD1Svg(femaleD1Res);
+        setFemaleD9Svg(femaleD9Res);
         setResultTab('match'); // reset to match tab initially
         setScreenMode('result');
       } else {
         throw new Error('Invalid response structure from compatibility API.');
       }
     } catch (err: any) {
-      console.error('[OpenKundali API] Error:', err);
+      console.error('[Compatibility calculation failed] Error:', err);
       setErrorMsg(err.message || 'API request failed. Please check your internet connection.');
     } finally {
       setIsLoading(false);
@@ -697,7 +870,7 @@ export const MatchCheckerScreen = ({ navigation }: any) => {
 
                 {/* Name Input */}
                 <View style={styles.fieldContainer}>
-                  <Typography variant="caption" color="muted" weight="semibold" style={styles.fieldLabel}>Name (Optional)</Typography>
+                  <Typography variant="caption" color="muted" weight="semibold" style={styles.fieldLabel}>Name</Typography>
                   <TextInput
                     value={maleName}
                     onChangeText={setMaleName}
@@ -768,7 +941,7 @@ export const MatchCheckerScreen = ({ navigation }: any) => {
 
                 {/* Name Input */}
                 <View style={styles.fieldContainer}>
-                  <Typography variant="caption" color="muted" weight="semibold" style={styles.fieldLabel}>Name (Optional)</Typography>
+                  <Typography variant="caption" color="muted" weight="semibold" style={styles.fieldLabel}>Name</Typography>
                   <TextInput
                     value={femaleName}
                     onChangeText={setFemaleName}
@@ -1226,6 +1399,117 @@ export const MatchCheckerScreen = ({ navigation }: any) => {
                       </Typography>
                     </View>
                   </PremiumCard>
+
+                  {/* SOUTH INDIAN CHARTS CARD */}
+                  {(maleD1Svg || maleD9Svg || femaleD1Svg || femaleD9Svg) && (
+                    <PremiumCard style={styles.ashtakootaCard}>
+                      <View style={[styles.ashtakootaHeader, { marginBottom: 16 }]}>
+                        <Compass color={colors.primary} size={18} />
+                        <Typography variant="body" weight="bold" style={{ marginLeft: 10 }}>
+                          South Indian Birth Charts
+                        </Typography>
+                      </View>
+
+                      {/* Prominent D1 / D9 Chart Selector Toggle */}
+                      <View style={{ 
+                        flexDirection: 'row', 
+                        backgroundColor: isDark ? '#16161C' : '#F1F5F9', 
+                        borderRadius: 14, 
+                        padding: 4, 
+                        marginBottom: 20, 
+                        borderWidth: 1, 
+                        borderColor: colors.border 
+                      }}>
+                        <TouchableOpacity
+                          onPress={() => setChartD1D9Tab('d1')}
+                          activeOpacity={0.8}
+                          style={{
+                            flex: 1,
+                            paddingVertical: 10,
+                            borderRadius: 10,
+                            backgroundColor: chartD1D9Tab === 'd1' ? colors.primary : 'transparent',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexDirection: 'row',
+                            gap: 6
+                          }}
+                        >
+                          <Grid color={chartD1D9Tab === 'd1' ? '#FFF' : colors.textSecondary} size={16} />
+                          <Typography 
+                            variant="caption" 
+                            weight="bold" 
+                            style={{ color: chartD1D9Tab === 'd1' ? '#FFF' : colors.textSecondary, fontSize: 12 }}
+                          >
+                            D1 Rasi Chart
+                          </Typography>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          onPress={() => setChartD1D9Tab('d9')}
+                          activeOpacity={0.8}
+                          style={{
+                            flex: 1,
+                            paddingVertical: 10,
+                            borderRadius: 10,
+                            backgroundColor: chartD1D9Tab === 'd9' ? colors.primary : 'transparent',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexDirection: 'row',
+                            gap: 6
+                          }}
+                        >
+                          <Sparkles color={chartD1D9Tab === 'd9' ? '#FFF' : colors.textSecondary} size={16} />
+                          <Typography 
+                            variant="caption" 
+                            weight="bold" 
+                            style={{ color: chartD1D9Tab === 'd9' ? '#FFF' : colors.textSecondary, fontSize: 12 }}
+                          >
+                            D9 Navamsha Chart
+                          </Typography>
+                        </TouchableOpacity>
+                      </View>
+
+                      {/* Male Chart View */}
+                      {(() => {
+                        const activeMaleSvg = chartD1D9Tab === 'd1' ? maleD1Svg : maleD9Svg;
+                        if (!activeMaleSvg) return null;
+                        return (
+                          <View style={{ marginBottom: 24, alignItems: 'center' }}>
+                            <Typography variant="body" weight="bold" color="primary" style={{ marginBottom: 8, textAlign: 'center' }}>
+                              {maleName} ({chartD1D9Tab === 'd1' ? 'Male D1 Rasi Chart' : 'Male D9 Navamsha Chart'})
+                            </Typography>
+                            <View style={{ backgroundColor: isDark ? '#16161C' : '#FAF8F5', borderColor: colors.border, borderWidth: 1, borderRadius: 16, padding: 10, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }}>
+                              <SvgXml 
+                                xml={inlineSvgStyles(activeMaleSvg)} 
+                                width={width - 72} 
+                                height={width - 72} 
+                              />
+                            </View>
+                          </View>
+                        );
+                      })()}
+
+                      {/* Female Chart View */}
+                      {(() => {
+                        const activeFemaleSvg = chartD1D9Tab === 'd1' ? femaleD1Svg : femaleD9Svg;
+                        if (!activeFemaleSvg) return null;
+                        return (
+                          <View style={{ alignItems: 'center' }}>
+                            <Typography variant="body" weight="bold" color="secondary" style={{ marginBottom: 8, textAlign: 'center' }}>
+                              {femaleName} ({chartD1D9Tab === 'd1' ? 'Female D1 Rasi Chart' : 'Female D9 Navamsha Chart'})
+                            </Typography>
+                            <View style={{ backgroundColor: isDark ? '#16161C' : '#FAF8F5', borderColor: colors.border, borderWidth: 1, borderRadius: 16, padding: 10, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }}>
+                              <SvgXml 
+                                xml={inlineSvgStyles(activeFemaleSvg)} 
+                                width={width - 72} 
+                                height={width - 72} 
+                              />
+                            </View>
+                          </View>
+                        );
+                      })()}
+                    </PremiumCard>
+                  )}
 
                   {/* DOSHAS & REMEDIES CARD */}
                   {matchData?.ashtakoota?.doshas && matchData.ashtakoota.doshas.length > 0 && (

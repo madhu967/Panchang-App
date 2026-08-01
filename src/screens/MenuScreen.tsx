@@ -103,7 +103,7 @@ export const MenuScreen = ({ navigation }: any) => {
 
           <View style={styles.themeGrid}>
             {themeOptions.map((t) => {
-              const isActive = themeMode === t.id && userOverride !== null;
+              const isActive = themeMode === t.id && userOverride !== null && userOverride !== 'system';
               return (
                 <TouchableOpacity
                   key={t.id}
@@ -138,7 +138,7 @@ export const MenuScreen = ({ navigation }: any) => {
               <Typography variant="body" weight="medium">Use System Default Theme</Typography>
               <Typography variant="caption" color="muted">Sync automatically with device OS dark/light mode</Typography>
             </View>
-            {userOverride === null && (
+            {(userOverride === null || userOverride === 'system') && (
               <View style={[styles.checkCircle, { backgroundColor: colors.primary }]}>
                 <Check color={colors.onPrimary || "#000000"} size={14} />
               </View>

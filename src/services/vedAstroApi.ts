@@ -397,3 +397,43 @@ export const getNorthIndianChart = async (payload: NorthIndianChartRequest): Pro
   }
 };
 
+export interface SouthIndianChartRequest {
+  Time: {
+    StdTime: string;
+    Location: {
+      Name: string;
+      Latitude: number;
+      Longitude: number;
+    };
+  };
+  ChartType: string;
+  Ayanamsa: string;
+}
+
+export const getSouthIndianChart = async (payload: SouthIndianChartRequest): Promise<string> => {
+  try {
+    const response = await axios.post('https://api.vedastro.org/api/Calculate/SouthIndianChart', payload, {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      timeout: 25000,
+    });
+
+    const data = response.data;
+    const svgContent = data?.Payload || data?.Payload?.SouthIndianChart || (typeof data === 'string' ? data : null);
+
+    if (svgContent && typeof svgContent === 'string') {
+      return svgContent;
+    }
+
+    if (typeof data === 'object') {
+      console.warn('VedAstro returned object but no SouthIndianChart payload string:', data);
+    }
+
+    throw new Error('SVG content not found in VedAstro SouthIndianChart response');
+  } catch (error: any) {
+    console.error('VedAstro getSouthIndianChart Error:', error?.response?.data || error.message || error);
+    throw error;
+  }
+};
+

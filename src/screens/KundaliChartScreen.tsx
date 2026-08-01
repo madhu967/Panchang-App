@@ -37,32 +37,39 @@ import {
   Download
 } from 'lucide-react-native';
 import { searchLocationSuggestions, LocationItem, getCachedLocation } from '../services/locationService';
-import { getNorthIndianChart, NorthIndianChartRequest } from '../services/vedAstroApi';
+import { getSouthIndianChart, SouthIndianChartRequest } from '../services/vedAstroApi';
 
 const { width } = Dimensions.get('window');
 
-// 20 divisional chart types with human-readable descriptions
+// divisional chart types with human-readable descriptions
 const CHART_TYPES = [
   { label: 'Rasi (D1) - Main Birth Chart', value: 'RasiD1', desc: 'Core life path, personality & destiny promise' },
   { label: 'Hora (D2) - Wealth & Finance', value: 'HoraD2', desc: 'Wealth, assets, values & material savings' },
   { label: 'Drekkana (D3) - Siblings & Karma', value: 'DrekkanaD3', desc: 'Siblings, energy, courage & action' },
-  { label: 'Chaturthamsa (D4) - Luck & Property', value: 'ChaturthamsaD4', desc: 'Net fortune, real estate, homes & assets' },
-  { label: 'Panchamsa (D5) - Fame & Talents', value: 'PanchamsaD5', desc: 'Spiritual inclination, creativity & fame' },
-  { label: 'Shashtamsa (D6) - Health & Debts', value: 'ShashtamsaD6', desc: 'Health, litigation, enemies & service' },
-  { label: 'Saptamsa (D7) - Children & Legacy', value: 'SaptamsaD7', desc: 'Progeny, children, legacy & physical creation' },
-  { label: 'Ashtamsa (D8) - Longevity & Mysticism', value: 'AshtamsaD8', desc: 'Obstacles, sudden changes & longevity' },
-  { label: 'Navamsa (D9) - Spouse & Dharma', value: 'NavamsaD9', desc: 'Marriage, spouse, dharma & late-life potential' },
-  { label: 'Dasamsa (D10) - Career & Profession', value: 'DasamsaD10', desc: 'Career, achievements, status & fame' },
-  { label: 'Rudramsa (D11) - Gains & Cashflow', value: 'RudramsaD11', desc: 'Sudden gains, cashflow & spiritual tests' },
-  { label: 'Dwadasamsa (D12) - Parents & Lineage', value: 'DwadasamsaD12', desc: 'Parents, heritage, ancestors & lineage karma' },
-  { label: 'Shodasamsa (D16) - Vehicles & Comforts', value: 'ShodasamsaD16', desc: 'Vehicles, physical pleasures & home comforts' },
-  { label: 'Vimsamsa (D20) - Spiritual Progress', value: 'VimsamsaD20', desc: 'Spirituality, religious practices & devotion' },
-  { label: 'Chaturvimsamsa (D24) - Education', value: 'ChaturvimsamsaD24', desc: 'Higher learning, academic skills & wisdom' },
-  { label: 'Saptavimsamsa (D27) - Strengths', value: 'SaptavimsamsaD27', desc: 'Vitality, physical strength & mental power' },
-  { label: 'Trimsamsa (D30) - Evil & Misfortunes', value: 'TrimsamsaD30', desc: 'Internal enemies, disease & obstacles' },
-  { label: 'Khavedamsa (D40) - Auspiciousness', value: 'KhavedamsaD40', desc: 'General auspiciousness, mother\'s blessings' },
-  { label: 'Akshavedamsa (D45) - Character', value: 'AkshavedamsaD45', desc: 'Innate character, integrity & general fortune' },
-  { label: 'Shastiamsa (D60) - Past Karma & Soul', value: 'ShastiamsaD60', desc: 'All-encompassing soul path & past life karma' }
+  { label: 'Chaturthamsha (D4) - Luck & Property', value: 'ChaturthamshaD4', desc: 'Net fortune, real estate, homes & assets' },
+  { label: 'Saptamsha (D7) - Children & Legacy', value: 'SaptamshaD7', desc: 'Progeny, children, legacy & physical creation' },
+  { label: 'Navamsha (D9) - Spouse & Dharma', value: 'NavamshaD9', desc: 'Marriage, spouse, dharma & late-life potential' },
+  { label: 'Dashamsha (D10) - Career & Profession', value: 'DashamshaD10', desc: 'Career, achievements, status & fame' },
+  { label: 'Dwadamsha (D12) - Parents & Lineage', value: 'DwadamshaD12', desc: 'Parents, heritage, ancestors & lineage karma' },
+  { label: 'Shodashamsha (D16) - Vehicles & Comforts', value: 'ShodashamshaD16', desc: 'Vehicles, physical pleasures & home comforts' },
+  { label: 'Vimshamsha (D20) - Spiritual Progress', value: 'VimshamshaD20', desc: 'Spirituality, religious practices & devotion' },
+  { label: 'Chaturvimshamsha (D24) - Education', value: 'ChaturvimshamshaD24', desc: 'Higher learning, academic skills & wisdom' },
+  { label: 'Saptavimshamsha (D27) - Strengths', value: 'SaptavimshamshaD27', desc: 'Vitality, physical strength & mental power' },
+  { label: 'Trimshamsha (D30) - Evil & Misfortunes', value: 'TrimshamshaD30', desc: 'Internal enemies, disease & obstacles' },
+  { label: 'Khavedamsha (D40) - Auspiciousness', value: 'KhavedamshaD40', desc: 'General auspiciousness, mother\'s blessings' },
+  { label: 'Akshavedamsha (D45) - Character', value: 'AkshavedamshaD45', desc: 'Innate character, integrity & general fortune' },
+  { label: 'Shashtyamsha (D60) - Past Karma & Soul', value: 'ShashtyamshaD60', desc: 'All-encompassing soul path & past life karma' },
+  { label: 'Sun D1 Chart', value: 'SunD1', desc: 'Soul purpose, authority & physical health' },
+  { label: 'Moon D1 Chart', value: 'MoonD1', desc: 'Mind, emotions, mental peace & mother' },
+  { label: 'Mars D1 Chart', value: 'MarsD1', desc: 'Courage, drive, physical strength & siblings' },
+  { label: 'Mercury D1 Chart', value: 'MercuryD1', desc: 'Intellect, communication, business & speech' },
+  { label: 'Jupiter D1 Chart', value: 'JupiterD1', desc: 'Wisdom, wealth, children & good fortune' },
+  { label: 'Venus D1 Chart', value: 'VenusD1', desc: 'Love, luxury, relationships & creativity' },
+  { label: 'Saturn D1 Chart', value: 'SaturnD1', desc: 'Discipline, career longevity & life lessons' },
+  { label: 'KP Chart', value: 'KP', desc: 'Krishnamurti Paddhati sub-lord cusp system' },
+  { label: 'Bhava Chalit Chart', value: 'BhavaChalit', desc: 'Actual planetary house positions in space' },
+  { label: 'South Indian Chart Style', value: 'SouthIndian', desc: 'South Indian rectangular fixed-sign format' },
+  { label: 'North Indian Chart Style', value: 'NorthIndian', desc: 'North Indian diamond fixed-house format' }
 ];
 
 // Mapping to VedAstro API expected names
@@ -70,23 +77,30 @@ const CHART_TYPE_API_MAP: Record<string, string> = {
   RasiD1: 'RasiD1',
   HoraD2: 'HoraD2',
   DrekkanaD3: 'DrekkanaD3',
-  ChaturthamsaD4: 'ChaturthamshaD4',
-  PanchamsaD5: 'PanchamshaD5',
-  ShashtamsaD6: 'ShashtamshaD6',
-  SaptamsaD7: 'SaptamshaD7',
-  AshtamsaD8: 'AshtamshaD8',
-  NavamsaD9: 'NavamshaD9',
-  DasamsaD10: 'DashamshaD10',
-  RudramsaD11: 'RudramshaD11',
-  DwadasamsaD12: 'DwadasamshaD12',
-  ShodasamsaD16: 'ShodashamshaD16',
-  VimsamsaD20: 'VimshamshaD20',
-  ChaturvimsamsaD24: 'ChaturvimshamshaD24',
-  SaptavimsamsaD27: 'SaptavimshamshaD27',
-  TrimsamsaD30: 'TrimshamshaD30',
-  KhavedamsaD40: 'KhavedamshaD40',
-  AkshavedamsaD45: 'AkshavedamshaD45',
-  ShastiamsaD60: 'ShashtiamshaD60'
+  ChaturthamshaD4: 'ChaturthamshaD4',
+  SaptamshaD7: 'SaptamshaD7',
+  NavamshaD9: 'NavamshaD9',
+  DashamshaD10: 'DashamshaD10',
+  DwadamshaD12: 'DwadamshaD12',
+  ShodashamshaD16: 'ShodashamshaD16',
+  VimshamshaD20: 'VimshamshaD20',
+  ChaturvimshamshaD24: 'ChaturvimshamshaD24',
+  SaptavimshamshaD27: 'SaptavimshamshaD27',
+  TrimshamshaD30: 'TrimshamshaD30',
+  KhavedamshaD40: 'KhavedamshaD40',
+  AkshavedamshaD45: 'AkshavedamshaD45',
+  ShashtyamshaD60: 'ShashtyamshaD60',
+  SunD1: 'SunD1',
+  MoonD1: 'MoonD1',
+  MarsD1: 'MarsD1',
+  MercuryD1: 'MercuryD1',
+  JupiterD1: 'JupiterD1',
+  VenusD1: 'VenusD1',
+  SaturnD1: 'SaturnD1',
+  KP: 'KP',
+  BhavaChalit: 'BhavaChalit',
+  SouthIndian: 'SouthIndian',
+  NorthIndian: 'NorthIndian'
 };
 
 const AYANAMSAS = [
@@ -115,15 +129,17 @@ const inlineSvgStyles = (rawSvg: string): string => {
   while ((styleMatch = styleRegex.exec(rawSvg)) !== null) {
     const styleContent = styleMatch[1].replace(/\/\*[\s\S]*?\*\//g, ''); // remove comments
     
-    // Regex to match class definitions: .ClassName { key: value; key2: value2 }
-    const classDefRegex = /\.([a-zA-Z0-9_-]+)\s*\{([^}]+)\}/g;
-    let classMatch;
+    // Regex to match selector and block: Selector { Rules }
+    const ruleBlockRegex = /([^{]+)\{([^}]+)\}/g;
+    let ruleBlockMatch;
     
-    while ((classMatch = classDefRegex.exec(styleContent)) !== null) {
-      const className = classMatch[1];
-      const declarations = classMatch[2].split(';');
-      const rules: Record<string, string> = {};
+    while ((ruleBlockMatch = ruleBlockRegex.exec(styleContent)) !== null) {
+      const selectors = ruleBlockMatch[1].split(',');
+      const block = ruleBlockMatch[2];
       
+      // Parse block declarations
+      const declarations = block.split(';');
+      const rules: Record<string, string> = {};
       declarations.forEach(decl => {
         const parts = decl.split(':');
         if (parts.length === 2) {
@@ -135,7 +151,16 @@ const inlineSvgStyles = (rawSvg: string): string => {
         }
       });
       
-      classStyles[className] = { ...(classStyles[className] || {}), ...rules };
+      // Map rules to each class found in the selectors
+      selectors.forEach(sel => {
+        const trimmedSel = sel.trim();
+        const classMatchRegex = /\.([a-zA-Z0-9_-]+)/g;
+        let classMatch;
+        while ((classMatch = classMatchRegex.exec(trimmedSel)) !== null) {
+          const className = classMatch[1];
+          classStyles[className] = { ...(classStyles[className] || {}), ...rules };
+        }
+      });
     }
   }
 
@@ -165,8 +190,8 @@ const inlineSvgStyles = (rawSvg: string): string => {
     return match;
   });
 
-  // 4. Clean up CDATA wrappers inside styles to prevent react-native-svg errors
-  processedSvg = processedSvg.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1');
+  // 4. Strip the <style> tags completely to prevent react-native-svg parser crashes
+  processedSvg = processedSvg.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
 
   return processedSvg;
 };
@@ -485,8 +510,8 @@ export const KundaliChartScreen = ({ navigation }: any) => {
   const [latitude, setLatitude] = useState(defaultLoc.latitude);
   const [longitude, setLongitude] = useState(defaultLoc.longitude);
   
-  const [chartType, setChartType] = useState('ChaturthamsaD4');
-  const [ayanamsa, setAyanamsa] = useState('RAMAN');
+  const [chartType, setChartType] = useState('RasiD1');
+  const [ayanamsa, setAyanamsa] = useState('LAHIRI');
 
   // Modal controls
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -558,11 +583,24 @@ export const KundaliChartScreen = ({ navigation }: any) => {
     setErrorMessage(null);
     setSvgData(null);
 
-    // Format StdTime: "HH:mm DD/MM/YYYY +05:30"
-    const formattedStdTime = `${tob} ${dob} +05:30`;
+    const getTzOffset = (lng: number) => {
+      if (lng === undefined || lng === null || isNaN(Number(lng))) {
+        return '+05:30';
+      }
+      const longNum = Number(lng);
+      const offsetHours = longNum / 15;
+      const totalMins = Math.round(offsetHours * 60);
+      const sign = totalMins >= 0 ? '+' : '-';
+      const absMins = Math.abs(totalMins);
+      const h = String(Math.floor(absMins / 60)).padStart(2, '0');
+      const m = String(absMins % 60).padStart(2, '0');
+      return `${sign}${h}:${m}`;
+    };
+
+    const formattedStdTime = `${tob} ${dob} ${getTzOffset(longitude)}`;
     const apiChartType = CHART_TYPE_API_MAP[chartType] || 'ChaturthamshaD4';
 
-    const requestBody: NorthIndianChartRequest = {
+    const requestBody: SouthIndianChartRequest = {
       Time: {
         StdTime: formattedStdTime,
         Location: {
@@ -576,7 +614,7 @@ export const KundaliChartScreen = ({ navigation }: any) => {
     };
 
     try {
-      const svg = await getNorthIndianChart(requestBody);
+      const svg = await getSouthIndianChart(requestBody);
       const processedSvg = inlineSvgStyles(svg);
       setSvgData(processedSvg);
     } catch (error: any) {
@@ -607,7 +645,7 @@ export const KundaliChartScreen = ({ navigation }: any) => {
         </TouchableOpacity>
         <View style={{ flex: 1, marginLeft: 12 }}>
           <Typography variant="subtitle" weight="bold">Divisional D-Charts</Typography>
-          <Typography variant="caption" color="muted">North Indian Kundali Chart Generator</Typography>
+          <Typography variant="caption" color="muted">South Indian Kundali Chart Generator</Typography>
         </View>
         <Grid color={colors.primary} size={22} style={{ marginRight: 16 }} />
       </View>
@@ -765,7 +803,7 @@ export const KundaliChartScreen = ({ navigation }: any) => {
             </View>
 
             <Typography variant="caption" color="muted" style={styles.footnote}>
-              This is a North Indian style diamond chart representation where houses are fixed and zodiac signs rotate counter-clockwise.
+              This is a South Indian style chart representation where zodiac signs are fixed in a clockwise layout and houses rotate accordingly.
             </Typography>
           </PremiumCard>
         ) : (

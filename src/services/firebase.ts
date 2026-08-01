@@ -21,35 +21,26 @@ const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
 let auth: any;
 
-if ((app as any)._authInitialized) {
+if (Platform.OS === 'web' || typeof window !== 'undefined') {
   auth = getAuth(app);
 } else {
-  if (Platform.OS === 'web') {
-    try {
-      auth = initializeAuth(app, {
-        persistence: browserLocalPersistence
-      });
-      (app as any)._authInitialized = true;
-      console.log("Firebase Auth initialized with browserLocalPersistence (Web).");
-    } catch (error: any) {
-      console.warn("Firebase Auth browserLocalPersistence init failed, falling back:", error);
-      auth = getAuth(app);
-      if (error?.code === 'auth/already-initialized' || String(error).includes('already-initialized')) {
-        (app as any)._authInitialized = true;
-      }
-    }
+  // Mobile native environment
+  const isInitialized = (global as any)._firebaseAuthInitialized;
+
+  if (isInitialized) {
+    auth = getAuth(app);
   } else {
     try {
       auth = initializeAuth(app, {
         persistence: getReactNativePersistence(AsyncStorage)
       });
-      (app as any)._authInitialized = true;
-      console.log("Firebase Auth initialized with getReactNativePersistence (Mobile).");
-    } catch (error: any) {
-      console.warn("Firebase Auth AsyncStorage persistence init failed, falling back:", error);
+      (global as any)._firebaseAuthInitialized = true;
+      console.log("Firebase Auth initialized successfully on Mobile with AsyncStorage.");
+    } catch (initError: any) {
+      console.warn("initializeAuth failed on Mobile, falling back to getAuth:", initError);
       auth = getAuth(app);
-      if (error?.code === 'auth/already-initialized' || String(error).includes('already-initialized')) {
-        (app as any)._authInitialized = true;
+      if (initError?.code === 'auth/already-initialized' || String(initError).includes('already-initialized')) {
+        (global as any)._firebaseAuthInitialized = true;
       }
     }
   }
