@@ -8,7 +8,7 @@ import { AnimatedVedicFooter } from '../components/AnimatedVedicFooter';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Menu, Sun, Moon, Calendar as CalendarIcon, MapPin, Compass, Search, Navigation, Sparkles, Star, ChevronRight, ChevronLeft, X, ArrowRight, ShieldCheck, Home, Heart } from 'lucide-react-native';
 import { searchLocationSuggestions, LocationItem, getCurrentLocationByIp, setCachedLocation, getCachedLocation, setCachedDate, loadStoredLocation } from '../services/locationService';
-import { getSunriseTime, getSunsetTime } from '../services/vedAstroApi';
+import { getSunriseTime, getSunsetTime, getPanchangaTable } from '../services/vedAstroApi';
 
 const { width } = Dimensions.get('window');
 
@@ -87,6 +87,8 @@ export const HomeScreen = ({ navigation }: any) => {
 
   const [sunriseTime, setSunriseTime] = useState<string>('05:48 AM');
   const [sunsetTime, setSunsetTime] = useState<string>('06:52 PM');
+  const [todayTithi, setTodayTithi] = useState<string>('Shukla Dashami');
+  const [todayNakshatra, setTodayNakshatra] = useState<string>('Vishakha');
   const [isLoadingSunTimes, setIsLoadingSunTimes] = useState<boolean>(false);
 
   const [showLocationModal, setShowLocationModal] = useState(false);
@@ -100,7 +102,18 @@ export const HomeScreen = ({ navigation }: any) => {
     const initializeLocation = async () => {
       setIsDetectingLocation(true);
       try {
-        // 1. Try to load from AsyncStorage first
+        // 1. Try to detect current location first
+        const detected = await getCurrentLocationByIp();
+        if (detected) {
+          setLocation(detected.name);
+          setLatitude(detected.latitude);
+          setLongitude(detected.longitude);
+          setLocationInput(detected.name);
+          await setCachedLocation(detected);
+          return;
+        }
+
+        // 2. Fall back to stored location if detection fails
         const stored = await loadStoredLocation();
         if (stored) {
           setLocation(stored.name);
@@ -108,19 +121,6 @@ export const HomeScreen = ({ navigation }: any) => {
           setLongitude(stored.longitude);
           setLocationInput(stored.name);
           return;
-        }
-
-        // 2. Fall back to IP Geolocation if no stored location
-        const detected = await getCurrentLocationByIp();
-        if (detected) {
-          const currentSelection = getCachedLocation();
-          if (!currentSelection) {
-            setLocation(detected.name);
-            setLatitude(detected.latitude);
-            setLongitude(detected.longitude);
-            setLocationInput(detected.name);
-            await setCachedLocation(detected);
-          }
         }
       } catch (err) {
         console.warn('Location initialization failed:', err);
@@ -148,32 +148,71 @@ export const HomeScreen = ({ navigation }: any) => {
     return () => clearTimeout(timer);
   }, [locationInput]);
 
-  // Fetch Sunrise and Sunset times when location or date changes
+  // Helper to format VedAstro Sunrise/Sunset StdTime: "07:26 31/12/1999 +08:00" -> "07:26 AM"
+  const formatVedAstroTime = (stdTime: string): string => {
+    if (!stdTime) return 'N/A';
+    try {
+      const timePart = stdTime.trim().split(/\s+/)[0];
+      if (!timePart) return stdTime;
+      const match = timePart.match(/^(\d{2}):(\d{2})/);
+      if (match) {
+        const h = parseInt(match[1], 10);
+        const m = match[2];
+        const ampm = h >= 12 ? 'PM' : 'AM';
+        const displayHour = h % 12 || 12;
+        return `${String(displayHour).padStart(2, '0')}:${m} ${ampm}`;
+      }
+    } catch (e) {
+      console.warn('Error formatting VedAstro time:', stdTime, e);
+    }
+    return stdTime;
+  };
+
+  // Fetch daily Panchang details from VedAstro API (Tithi, Nakshatra, Sunrise, Sunset)
   useEffect(() => {
     let isMounted = true;
-    const fetchSunTimes = async () => {
+    const fetchPanchangDetails = async () => {
       setIsLoadingSunTimes(true);
       try {
-        const [sunrise, sunset] = await Promise.all([
-          getSunriseTime(date, latitude, longitude, location),
-          getSunsetTime(date, latitude, longitude, location),
-        ]);
+        const response = await getPanchangaTable(date, latitude, longitude, location);
+        
+        if (isMounted && response) {
+          const panchangaTable = response?.Payload?.PanchangaTable || response?.PanchangaTable || response;
+          
+          // Parse Sunrise/Sunset
+          const sunrise = panchangaTable?.Sunrise?.StdTime ? formatVedAstroTime(panchangaTable.Sunrise.StdTime) : '05:48 AM';
+          const sunset = panchangaTable?.Sunset?.StdTime ? formatVedAstroTime(panchangaTable.Sunset.StdTime) : '06:52 PM';
+          setSunriseTime(sunrise);
+          setSunsetTime(sunset);
 
-        if (isMounted) {
-          // Format standard VedAstro output e.g. "05:48:12 20/07/2026 +05:30" or extract time
-          const cleanSunrise = sunrise.split(' ')[0] || sunrise;
-          const cleanSunset = sunset.split(' ')[0] || sunset;
-          setSunriseTime(cleanSunrise);
-          setSunsetTime(cleanSunset);
+          // Parse Tithi
+          let tithiName = 'Shukla Dashami';
+          if (panchangaTable?.Tithi?.Name) {
+            const rawName = panchangaTable.Tithi.Name;
+            // Capitalize first letter
+            const capName = rawName.charAt(0).toUpperCase() + rawName.slice(1);
+            tithiName = panchangaTable.Tithi.Paksha 
+              ? `${panchangaTable.Tithi.Paksha} ${capName}`
+              : capName;
+          }
+          setTodayTithi(tithiName);
+
+          // Parse Nakshatra
+          let nakshatraName = 'Vishakha';
+          if (panchangaTable?.Nakshatra) {
+            const rawNak = panchangaTable.Nakshatra;
+            nakshatraName = rawNak.charAt(0).toUpperCase() + rawNak.slice(1);
+          }
+          setTodayNakshatra(nakshatraName);
         }
       } catch (err) {
-        console.warn('Failed to fetch sun times on Home:', err);
+        console.warn('Failed to fetch daily Panchang details from VedAstro on Home:', err);
       } finally {
         if (isMounted) setIsLoadingSunTimes(false);
       }
     };
 
-    fetchSunTimes();
+    fetchPanchangDetails();
     return () => { isMounted = false; };
   }, [location, latitude, longitude, date]);
 
@@ -473,11 +512,11 @@ export const HomeScreen = ({ navigation }: any) => {
                       return `${weekdays[d.getDay()]}, ${date}`;
                     })()}
                   </Typography>
-                  <Typography variant="subtitle" weight="bold" style={{ marginTop: 2 }}>Shukla Dashami</Typography>
+                  <Typography variant="subtitle" weight="bold" style={{ marginTop: 2 }}>{todayTithi}</Typography>
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
                   <Typography variant="caption" color="muted" weight="medium">Nakshatra</Typography>
-                  <Typography variant="subtitle" weight="bold" style={{ marginTop: 2 }}>Vishakha</Typography>
+                  <Typography variant="subtitle" weight="bold" style={{ marginTop: 2 }}>{todayNakshatra}</Typography>
                 </View>
               </View>
             </PremiumCard>
