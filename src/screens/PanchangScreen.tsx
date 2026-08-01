@@ -34,7 +34,7 @@ import {
   ArrowUpDown,
   BookOpen
 } from 'lucide-react-native';
-import { getPanchangaTable } from '../services/vedAstroApi';
+import { getAdvancedPanchang } from '../services/navamshaApi';
 import { getCachedLocation, getCachedDate } from '../services/locationService';
 
 const { width } = Dimensions.get('window');
@@ -95,78 +95,233 @@ export const PanchangScreen: React.FC<PanchangScreenProps> = ({ navigation, rout
   const [isInspectorExpanded, setIsInspectorExpanded] = useState<boolean>(false);
 
   const normalizeResponse = (res: any): NormalizedPanchang => {
-    // Handle nesting: VedAstro response is `{ Status: 'Success', Payload: { PanchangaTable: { ... } } }`
-    const panchangaTable = res?.Payload?.PanchangaTable || res?.PanchangaTable || res;
+    // If the API returns a wrapper e.g. { statusCode: 200, output: { ... } } or { status: true, data: { ... } }
+    const data = res?.output || res?.data || res?.Payload?.PanchangaTable || res?.PanchangaTable || res;
 
-    // Helper to format VedAstro Sunrise/Sunset StdTime: "07:26 31/12/1999 +08:00" -> "07:26 AM"
-    const formatVedAstroTime = (stdTime: string): string => {
-      if (!stdTime) return 'N/A';
+    // Helper to format time values cleanly (e.g. HH:MM:SS or ISO format)
+    const formatTime = (timeVal: any): string => {
+      if (!timeVal) return 'N/A';
+      const timeStr = String(timeVal).trim();
+      
+      // Check if it matches ISO timestamp: e.g. "2026-08-01T19:25:30.395521+05:30"
+      if (timeStr.includes('T')) {
+        try {
+          const d = new Date(timeStr);
+          if (!isNaN(d.getTime())) {
+            let hours = d.getHours();
+            let minutes = d.getMinutes();
+            const ampm = hours >= 12 ? 'PM' : 'AM';
+            const displayHour = hours % 12 || 12;
+            const displayMin = String(minutes).padStart(2, '0');
+            return `${String(displayHour).padStart(2, '0')}:${displayMin} ${ampm}`;
+          }
+        } catch (e) {
+          console.warn('Error parsing ISO time:', timeStr, e);
+        }
+      }
+
+      // Check if it has a pattern like "07:26 31/12/1999 +08:00"
       try {
-        const timePart = stdTime.trim().split(/\s+/)[0];
-        if (!timePart) return stdTime;
-        const match = timePart.match(/^(\d{2}):(\d{2})/);
-        if (match) {
-          const h = parseInt(match[1], 10);
-          const m = match[2];
-          const ampm = h >= 12 ? 'PM' : 'AM';
-          const displayHour = h % 12 || 12;
-          return `${String(displayHour).padStart(2, '0')}:${m} ${ampm}`;
+        const timePart = timeStr.split(/\s+/)[0];
+        if (timePart && timePart.includes(':')) {
+          const match = timePart.match(/^(\d{1,2}):(\d{2})/);
+          if (match) {
+            const h = parseInt(match[1], 10);
+            const m = match[2];
+            const ampm = h >= 12 ? 'PM' : 'AM';
+            const displayHour = h % 12 || 12;
+            return `${String(displayHour).padStart(2, '0')}:${m} ${ampm}`;
+          }
         }
       } catch (e) {
-        console.warn('Error formatting VedAstro time:', stdTime, e);
+        console.warn('Error formatting time:', timeStr, e);
       }
-      return stdTime;
+      return timeStr;
     };
 
-    // Parse Tithi
-    const tithi = {
-      name: panchangaTable?.Tithi?.Name 
-        ? (panchangaTable.Tithi.Paksha ? `${panchangaTable.Tithi.Name} (${panchangaTable.Tithi.Paksha} Paksha)` : panchangaTable.Tithi.Name)
-        : 'N/A',
-      start: '',
-      end: '',
-      detail: panchangaTable?.Tithi?.Phase ? `Phase: ${panchangaTable.Tithi.Phase}` : ''
+    // Helper to format end time values cleanly
+    const getEndTimeString = (item: any): string => {
+      if (!item) return '';
+      const endVal = item.end_time || item.ends_at || item.end || item.End || '';
+      if (!endVal) return '';
+      return formatTime(endVal);
     };
 
-    // Parse Nakshatra
-    const nakshatra = {
-      name: panchangaTable?.Nakshatra || 'N/A',
-      start: '',
-      end: '',
-      detail: ''
-    };
+    // Parse Tithi (supports array or single object/string)
+    let tithi = { name: 'N/A', start: '', end: '', detail: '' };
+    let tithiData = data?.tithi || data?.Tithi;
+    if (Array.isArray(tithiData)) {
+      tithiData = tithiData[0];
+    }
+    if (tithiData) {
+      if (typeof tithiData === 'string') {
+        tithi.name = tithiData;
+      } else if (typeof tithiData === 'object') {
+        tithi.name = tithiData.name || tithiData.tithi_name || tithiData.Name || 'N/A';
+        tithi.end = getEndTimeString(tithiData);
+        tithi.detail = tithiData.special || tithiData.Phase || (tithiData.paksha ? `Paksha: ${tithiData.paksha}` : '');
+        if (tithiData.paksha && !tithi.name.toLowerCase().includes(tithiData.paksha.toLowerCase())) {
+          tithi.name = `${tithi.name} (${tithiData.paksha} Paksha)`;
+        }
+      }
+    }
 
-    // Parse Yoga
-    const yoga = {
-      name: panchangaTable?.Yoga?.Name || 'N/A',
-      start: '',
-      end: '',
-      detail: panchangaTable?.Yoga?.Description || ''
-    };
+    // Parse Nakshatra (supports array or single object/string)
+    let nakshatra = { name: 'N/A', start: '', end: '', detail: '' };
+    let nakData = data?.nakshatra || data?.Nakshatra;
+    if (Array.isArray(nakData)) {
+      nakData = nakData[0];
+    }
+    if (nakData) {
+      if (typeof nakData === 'string') {
+        nakshatra.name = nakData;
+      } else if (typeof nakData === 'object') {
+        nakshatra.name = nakData.name || nakData.nak_name || nakData.nakshatra_name || nakData.Name || 'N/A';
+        nakshatra.end = getEndTimeString(nakData);
+        
+        const lordName = typeof nakData.lord === 'object' ? nakData.lord?.name : nakData.lord;
+        const lordVal = nakData.ruler || lordName || nakData.Lord || '';
+        nakshatra.detail = lordVal ? `Lord: ${lordVal}` : '';
+      }
+    }
 
-    // Parse Karana
-    const karana = {
-      name: panchangaTable?.Karana || 'N/A',
-      start: '',
-      end: '',
-      detail: ''
-    };
+    // Parse Yoga (supports array or single object/string)
+    let yoga = { name: 'N/A', start: '', end: '', detail: '' };
+    let yogaData = data?.yoga || data?.Yoga;
+    if (Array.isArray(yogaData)) {
+      yogaData = yogaData[0];
+    }
+    if (yogaData) {
+      if (typeof yogaData === 'string') {
+        yoga.name = yogaData;
+      } else if (typeof yogaData === 'object') {
+        yoga.name = yogaData.name || yogaData.yoga_name || yogaData.Name || 'N/A';
+        yoga.end = getEndTimeString(yogaData);
+        yoga.detail = yogaData.description || yogaData.Description || '';
+      }
+    }
 
-    // Parse Vara
-    const vara = {
-      name: panchangaTable?.Vara || 'N/A',
-      detail: panchangaTable?.Vara ? `Weekday: ${panchangaTable.Vara}` : ''
-    };
+    // Parse Karana (supports array or single object/string)
+    let karana = { name: 'N/A', start: '', end: '', detail: '' };
+    let karanaData = data?.karana || data?.Karana;
+    if (Array.isArray(karanaData)) {
+      karanaData = karanaData[0];
+    }
+    if (karanaData) {
+      if (typeof karanaData === 'string') {
+        karana.name = karanaData;
+      } else if (typeof karanaData === 'object') {
+        karana.name = karanaData.name || karanaData.karana_name || karanaData.Name || 'N/A';
+        karana.end = getEndTimeString(karanaData);
+        karana.detail = karanaData.special || '';
+      }
+    }
 
-    // Sun & Moon times
-    const sunrise = panchangaTable?.Sunrise?.StdTime ? formatVedAstroTime(panchangaTable.Sunrise.StdTime) : 'N/A';
-    const sunset = panchangaTable?.Sunset?.StdTime ? formatVedAstroTime(panchangaTable.Sunset.StdTime) : 'N/A';
-    const moonrise = 'N/A';
-    const moonset = 'N/A';
+    // Parse Vara (Weekday)
+    let vara = { name: 'N/A', detail: '' };
+    const varaData = data?.vaara || data?.vara || data?.Vara || data?.weekday || data?.day || data?.Day;
+    if (varaData) {
+      if (typeof varaData === 'string') {
+        vara.name = varaData;
+      } else if (typeof varaData === 'object') {
+        vara.name = varaData.name || varaData.Name || 'N/A';
+        vara.detail = varaData.ruler || varaData.lord || varaData.Lord || '';
+      }
+    }
 
-    // Auspicious/Inauspicious periods (VedAstro PanchangaTable doesn't return these directly)
+    // Parse Lunar Month
+    let lunarMonth = 'N/A';
+    const lunarMonthData = data?.lunar_month || data?.lunarMonth || data?.LunarMonth;
+    if (lunarMonthData) {
+      if (typeof lunarMonthData === 'string') {
+        lunarMonth = lunarMonthData;
+      } else if (typeof lunarMonthData === 'object') {
+        lunarMonth = lunarMonthData.amanta || lunarMonthData.purnimanta || lunarMonthData.name || 'N/A';
+      }
+    }
+
+    // Sunrise, Sunset, Moonrise, Moonset
+    const sunrise = formatTime(data?.sunrise || data?.Sunrise?.StdTime || data?.Sunrise);
+    const sunset = formatTime(data?.sunset || data?.Sunset?.StdTime || data?.Sunset);
+    const moonrise = formatTime(data?.moonrise || data?.Moonrise);
+    const moonset = formatTime(data?.moonset || data?.Moonset);
+
+    // Auspicious and Inauspicious periods
     const auspiciousPeriods: { title: string; time: string; type: string }[] = [];
     const inauspiciousPeriods: { title: string; time: string }[] = [];
+
+    // Helper to process common periods like Rahu Kaal, Abhijit, etc.
+    const processPeriod = (title: string, periodObj: any, isInauspicious = true) => {
+      if (!periodObj) return;
+      let timeStr = '';
+      if (typeof periodObj === 'string') {
+        timeStr = formatTime(periodObj);
+      } else if (typeof periodObj === 'object') {
+        const start = formatTime(periodObj.start || periodObj.start_time || '');
+        const end = formatTime(periodObj.end || periodObj.end_time || '');
+        timeStr = start && end ? `${start} - ${end}` : (start || end || '');
+      }
+      if (timeStr) {
+        if (isInauspicious) {
+          inauspiciousPeriods.push({ title, time: timeStr });
+        } else {
+          auspiciousPeriods.push({ title, time: timeStr, type: 'Muhurat' });
+        }
+      }
+    };
+
+    processPeriod('Rahu Kaal', data?.rahukaal || data?.rahu_kaal || data?.RahuKaal || data?.rahu, true);
+    processPeriod('Gulika Kaal', data?.gulika || data?.gulik_kaal || data?.gulik_kal || data?.gulik, true);
+    processPeriod('Yamaganda', data?.yamaganda || data?.yamagandam || data?.yamaganda_kaal || data?.yamaganda_kal, true);
+    processPeriod('Abhijit Muhurta', data?.abhijit_muhurta || data?.abhijit || data?.Abhijit, false);
+    processPeriod('Durmuhurta', data?.durmuhurta || data?.durmuhurtham || data?.dur_muhurta, true);
+    processPeriod('Varjyam', data?.varjyam || data?.varjya, true);
+    processPeriod('Amrit Kaal', data?.amrit_kaal || data?.amrit_kal || data?.amrita_kaal, false);
+
+    // Parse Navamsha specific list structure for auspicious periods
+    const navamshaAuspicious = data?.auspicious_period || data?.auspicious_periods;
+    if (Array.isArray(navamshaAuspicious)) {
+      navamshaAuspicious.forEach((p: any) => {
+        let timeStr = '';
+        if (p.period && Array.isArray(p.period) && p.period.length > 0) {
+          const firstPeriod = p.period[0];
+          const start = formatTime(firstPeriod.start);
+          const end = formatTime(firstPeriod.end);
+          timeStr = `${start} - ${end}`;
+        } else if (p.start && p.end) {
+          timeStr = `${formatTime(p.start)} - ${formatTime(p.end)}`;
+        }
+        if (timeStr) {
+          auspiciousPeriods.push({
+            title: p.name || p.title || 'Auspicious Period',
+            time: timeStr,
+            type: p.type || 'Auspicious'
+          });
+        }
+      });
+    }
+
+    // Parse Navamsha specific list structure for inauspicious periods
+    const navamshaInauspicious = data?.inauspicious_period || data?.inauspicious_periods;
+    if (Array.isArray(navamshaInauspicious)) {
+      navamshaInauspicious.forEach((p: any) => {
+        let timeStr = '';
+        if (p.period && Array.isArray(p.period) && p.period.length > 0) {
+          const firstPeriod = p.period[0];
+          const start = formatTime(firstPeriod.start);
+          const end = formatTime(firstPeriod.end);
+          timeStr = `${start} - ${end}`;
+        } else if (p.start && p.end) {
+          timeStr = `${formatTime(p.start)} - ${formatTime(p.end)}`;
+        }
+        if (timeStr) {
+          inauspiciousPeriods.push({
+            title: p.name || p.title || 'Inauspicious Period',
+            time: timeStr
+          });
+        }
+      });
+    }
 
     // Flatten other fields for inspector
     const otherDetails: { key: string; value: string }[] = [];
@@ -182,7 +337,7 @@ export const PanchangScreen: React.FC<PanchangScreenProps> = ({ navigation, rout
         }
       }
     };
-    traverse(panchangaTable);
+    traverse(data);
 
     return {
       tithi,
@@ -190,7 +345,7 @@ export const PanchangScreen: React.FC<PanchangScreenProps> = ({ navigation, rout
       yoga,
       karana,
       vara,
-      lunarMonth: panchangaTable?.LunarMonth || 'N/A',
+      lunarMonth,
       sunrise,
       sunset,
       moonrise,
@@ -211,7 +366,7 @@ export const PanchangScreen: React.FC<PanchangScreenProps> = ({ navigation, rout
       setIsUsingFallback(false);
       
       try {
-        const response = await getPanchangaTable(date, latitude, longitude, location);
+        const response = await getAdvancedPanchang(date, latitude, longitude);
         
         if (isMounted) {
           if (response) {
@@ -219,13 +374,13 @@ export const PanchangScreen: React.FC<PanchangScreenProps> = ({ navigation, rout
             const normalized = normalizeResponse(response);
             setPanchangData(normalized);
           } else {
-            throw new Error("Empty response from VedAstro API");
+            throw new Error("Empty response from Navamsha API");
           }
         }
       } catch (err: any) {
-        console.warn('VedAstro API failed, using offline fallback calculations:', err);
+        console.warn('Navamsha API failed, using offline fallback calculations:', err);
         if (isMounted) {
-          setErrorMsg('VedAstro API failed. Using standard values.');
+          setErrorMsg('Navamsha API failed. Using standard values.');
           setIsUsingFallback(true);
           // Set mock data based on input date to prevent empty screen
           const mockData: NormalizedPanchang = {
@@ -281,7 +436,7 @@ export const PanchangScreen: React.FC<PanchangScreenProps> = ({ navigation, rout
         `• Vara: ${panchangData.vara.name}\n\n` +
         `🌞 Sunrise: ${panchangData.sunrise} | 🌇 Sunset: ${panchangData.sunset}\n` +
         `🌙 Moonrise: ${panchangData.moonrise} | 🌗 Moonset: ${panchangData.moonset}\n\n` +
-        `Calculated via VedAstro Engine.`;
+        `Calculated via Navamsha Engine.`;
 
       await Share.share({
         message: shareMessage,
@@ -305,19 +460,24 @@ export const PanchangScreen: React.FC<PanchangScreenProps> = ({ navigation, rout
   // Determine if we should display the static astrological card (only if signs are present in response)
   const showAstroMetrics = React.useMemo(() => {
     if (!rawApiResponse) return false;
-    const data = rawApiResponse?.Payload?.PanchangaTable || rawApiResponse?.PanchangaTable || rawApiResponse;
-    return !!(data.Ayanamsa || data.LunarMonth || data.DishaShool || data.HoraLord || data.IshtaKaala);
+    const data = rawApiResponse?.data || rawApiResponse?.Payload?.PanchangaTable || rawApiResponse?.PanchangaTable || rawApiResponse;
+    return !!(data.ayanamsa || data.Ayanamsa || data.LunarMonth || data.lunar_month || data.DishaShool || data.disha_shool || data.HoraLord || data.hora_lord || data.IshtaKaala || data.ishta_kaala || data.ritu || data.season || data.samvat || data.vikram_samvat || data.saka_samvat);
   }, [rawApiResponse]);
 
   const astroMetrics = React.useMemo(() => {
     if (!rawApiResponse) return [];
-    const data = rawApiResponse?.Payload?.PanchangaTable || rawApiResponse?.PanchangaTable || rawApiResponse;
+    const data = rawApiResponse?.data || rawApiResponse?.Payload?.PanchangaTable || rawApiResponse?.PanchangaTable || rawApiResponse;
     return [
-      { label: 'Ayanamsa', value: data.Ayanamsa },
-      { label: 'Lunar Month', value: data.LunarMonth },
-      { label: 'Disha Shool', value: data.DishaShool },
-      { label: 'Hora Lord', value: data.HoraLord?.Name || data.HoraLord },
-      { label: 'Ishta Kaala', value: data.IshtaKaala?.DegreeMinuteSecond || data.IshtaKaala },
+      { label: 'Ayanamsa', value: data.ayanamsa || data.Ayanamsa || data.settings?.ayanamsha },
+      { label: 'Lunar Month', value: data.lunar_month || data.LunarMonth },
+      { label: 'Ritu / Season', value: data.ritu || data.season },
+      { label: 'Vikram Samvat', value: data.vikram_samvat || data.samvat?.vikram || data.samvat },
+      { label: 'Saka Samvat', value: data.saka_samvat || data.samvat?.saka },
+      { label: 'Disha Shool', value: data.disha_shool || data.DishaShool },
+      { label: 'Hora Lord', value: data.hora_lord?.name || data.hora_lord || data.HoraLord?.Name || data.HoraLord },
+      { label: 'Ishta Kaala', value: data.ishta_kaala || data.IshtaKaala?.DegreeMinuteSecond || data.IshtaKaala },
+      { label: 'Observation Point', value: data.settings?.observation_point },
+      { label: 'Node Type', value: data.settings?.node_type },
     ].filter(item => item.value !== undefined && item.value !== null && item.value !== '');
   }, [rawApiResponse]);
 
@@ -355,32 +515,60 @@ export const PanchangScreen: React.FC<PanchangScreenProps> = ({ navigation, rout
             <CheckCircle2 color={colors.primary} size={16} />
           )}
           <Typography variant="caption" weight="semibold" style={{ marginLeft: 8, color: isUsingFallback ? '#EF4444' : colors.primary }}>
-            {isUsingFallback ? 'VedAstro API failed - Displaying Mock Offline Data' : 'Powered by VedAstro Calculation Engine'}
+            {isUsingFallback ? 'Navamsha API failed - Displaying Mock Offline Data' : 'Powered by Navamsha Advanced Calculation Engine'}
           </Typography>
         </View>
 
         {/* Sun & Moon Times Banner */}
         <PremiumCard style={styles.sunMoonCard}>
           <View style={styles.sunMoonRow}>
+            {/* Sunrise */}
             <View style={styles.sunBox}>
-              <Sun color={colors.primary} size={24} />
-              <Typography variant="caption" color="muted" style={{ marginTop: 6 }}>Sunrise</Typography>
+              <Sun color={colors.primary} size={22} />
+              <Typography variant="caption" color="muted" style={{ marginTop: 4 }}>Sunrise</Typography>
               {isLoading ? (
                 <ActivityIndicator size="small" color={colors.primary} style={{ marginTop: 2 }} />
               ) : (
-                <Typography variant="body" weight="bold">{panchangData?.sunrise}</Typography>
+                <Typography variant="body" weight="bold" style={{ fontSize: 13 }}>{panchangData?.sunrise}</Typography>
               )}
             </View>
 
             <View style={styles.verticalDivider} />
 
+            {/* Sunset */}
             <View style={styles.sunBox}>
-              <Moon color={colors.secondary} size={24} />
-              <Typography variant="caption" color="muted" style={{ marginTop: 6 }}>Sunset</Typography>
+              <Sun color="#EA580C" size={22} />
+              <Typography variant="caption" color="muted" style={{ marginTop: 4 }}>Sunset</Typography>
               {isLoading ? (
                 <ActivityIndicator size="small" color={colors.primary} style={{ marginTop: 2 }} />
               ) : (
-                <Typography variant="body" weight="bold">{panchangData?.sunset}</Typography>
+                <Typography variant="body" weight="bold" style={{ fontSize: 13 }}>{panchangData?.sunset}</Typography>
+              )}
+            </View>
+
+            <View style={styles.verticalDivider} />
+
+            {/* Moonrise */}
+            <View style={styles.sunBox}>
+              <Moon color={colors.secondary} size={22} />
+              <Typography variant="caption" color="muted" style={{ marginTop: 4 }}>Moonrise</Typography>
+              {isLoading ? (
+                <ActivityIndicator size="small" color={colors.primary} style={{ marginTop: 2 }} />
+              ) : (
+                <Typography variant="body" weight="bold" style={{ fontSize: 13 }}>{panchangData?.moonrise}</Typography>
+              )}
+            </View>
+
+            <View style={styles.verticalDivider} />
+
+            {/* Moonset */}
+            <View style={styles.sunBox}>
+              <Moon color="#94A3B8" size={22} />
+              <Typography variant="caption" color="muted" style={{ marginTop: 4 }}>Moonset</Typography>
+              {isLoading ? (
+                <ActivityIndicator size="small" color={colors.primary} style={{ marginTop: 2 }} />
+              ) : (
+                <Typography variant="body" weight="bold" style={{ fontSize: 13 }}>{panchangData?.moonset}</Typography>
               )}
             </View>
           </View>
@@ -399,7 +587,7 @@ export const PanchangScreen: React.FC<PanchangScreenProps> = ({ navigation, rout
           <PremiumCard style={{ paddingVertical: 40, alignItems: 'center', justifyContent: 'center' }}>
             <ActivityIndicator size="large" color={colors.primary} />
             <Typography variant="caption" color="muted" style={{ marginTop: 12 }}>
-              Calculating Panchang using VedAstro API...
+              Calculating Panchang using Navamsha API...
             </Typography>
           </PremiumCard>
         ) : (
@@ -410,7 +598,6 @@ export const PanchangScreen: React.FC<PanchangScreenProps> = ({ navigation, rout
               { title: 'Yoga (Luni-Solar)', ...panchangData?.yoga },
               { title: 'Karana (Half Tithi)', ...panchangData?.karana },
               { title: 'Vara (Weekday)', name: panchangData?.vara.name, detail: panchangData?.vara.detail, start: '', end: '' },
-              { title: 'Lunar Month', name: panchangData?.lunarMonth, detail: 'Astrological Month', start: '', end: '' },
             ].map((item, idx, arr) => (
               <View 
                 key={idx} 
@@ -525,88 +712,7 @@ export const PanchangScreen: React.FC<PanchangScreenProps> = ({ navigation, rout
           </View>
         )}
 
-        {/* VedAstro API Details Search Inspector */}
-        {!isLoading && panchangData && (
-          <View style={styles.section}>
-            <TouchableOpacity 
-              style={[styles.accordionHeader, { backgroundColor: colors.surface, borderColor: colors.border }]}
-              onPress={() => setIsInspectorExpanded(!isInspectorExpanded)}
-              activeOpacity={0.8}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Sliders color={colors.primary} size={18} />
-                <Typography variant="body" weight="bold" style={{ marginLeft: 8 }}>
-                  Search VedAstro API Response ({panchangData.otherDetails.length} keys)
-                </Typography>
-              </View>
-              <ChevronDown 
-                color={colors.text} 
-                size={18} 
-                style={{ transform: [{ rotate: isInspectorExpanded ? '180deg' : '0deg' }] }} 
-              />
-            </TouchableOpacity>
 
-            {isInspectorExpanded && (
-              <PremiumCard style={styles.inspectorCard}>
-                <Typography variant="caption" color="muted" style={{ marginBottom: 12 }}>
-                  Verify or search any key-value pairs directly retrieved from the VedAstro PanchangaTable JSON response.
-                </Typography>
-                
-                {/* Search Bar */}
-                <View style={[styles.searchBar, { backgroundColor: isDark ? '#1E1E26' : '#E2E8F0', borderColor: colors.border }]}>
-                  <Search color={colors.textSecondary} size={16} />
-                  <TextInput
-                    value={searchQuery}
-                    onChangeText={setSearchQuery}
-                    placeholder="Search response keys or values..."
-                    placeholderTextColor={colors.textSecondary}
-                    style={[styles.searchInput, { color: colors.text }]}
-                  />
-                </View>
-
-                {/* Key-Value Lists */}
-                <ScrollView style={styles.inspectorScroll} nestedScrollEnabled>
-                  {filteredDetails.length === 0 ? (
-                    <View style={{ paddingVertical: 20, alignItems: 'center' }}>
-                      <Typography variant="caption" color="muted">No matching parameters found.</Typography>
-                    </View>
-                  ) : (
-                    filteredDetails.map((item, idx) => (
-                      <View key={idx} style={[styles.inspectorRow, { borderBottomColor: isDark ? '#1E1E26' : '#F0EAD6' }]}>
-                        <Typography variant="caption" weight="semibold" style={{ color: colors.primary, flex: 1.2 }}>
-                          {item.key}
-                        </Typography>
-                        <Typography variant="caption" style={{ color: colors.text, flex: 1.8, textAlign: 'right' }}>
-                          {item.value}
-                        </Typography>
-                      </View>
-                    ))
-                  )}
-                </ScrollView>
-
-                {/* Raw JSON Toggle */}
-                <TouchableOpacity 
-                  style={[styles.rawToggleBtn, { borderColor: colors.primary }]}
-                  onPress={() => setShowRawJson(!showRawJson)}
-                >
-                  <Typography variant="caption" weight="bold" color="primary">
-                    {showRawJson ? 'Hide Raw JSON' : 'Show Full Raw JSON Payload'}
-                  </Typography>
-                </TouchableOpacity>
-
-                {showRawJson && (
-                  <View style={[styles.rawJsonContainer, { backgroundColor: isDark ? '#000000' : '#F8FAFC' }]}>
-                    <ScrollView horizontal nestedScrollEnabled style={{ padding: 10 }}>
-                      <Typography variant="caption" style={{ fontFamily: 'monospace', fontSize: 11 }}>
-                        {JSON.stringify(rawApiResponse || panchangData, null, 2)}
-                      </Typography>
-                    </ScrollView>
-                  </View>
-                )}
-              </PremiumCard>
-            )}
-          </View>
-        )}
         
         <View style={{ height: 110 }} />
       </ScrollView>
