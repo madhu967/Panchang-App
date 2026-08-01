@@ -34,17 +34,9 @@ import {
   Compass
 } from 'lucide-react-native';
 import { searchLocationSuggestions, LocationItem } from '../services/locationService';
-import { getMatchReport, MatchReportRequest } from '../services/vedAstroApi';
 
 const { width } = Dimensions.get('window');
 
-const AYANAMSA_OPTIONS = [
-  { label: 'Raman', value: 'RAMAN' },
-  { label: 'Lahiri', value: 'LAHIRI' },
-  { label: 'KP', value: 'KP' },
-  { label: 'Yukteshwar', value: 'YUKTESHWAR' },
-  { label: 'Sayana', value: 'SAYANA' }
-];
 
 /* =========================================================================
                           CUSTOM DATE PICKER MODAL
@@ -369,7 +361,6 @@ export const MatchCheckerScreen = ({ navigation }: any) => {
   const [femaleLat, setFemaleLat] = useState(16.561);
   const [femaleLng, setFemaleLng] = useState(81.52);
 
-  const [ayanamsa, setAyanamsa] = useState('RAMAN');
 
   // Custom picker modals visibility
   const [datePickerVisible, setDatePickerVisible] = useState(false);
@@ -389,6 +380,10 @@ export const MatchCheckerScreen = ({ navigation }: any) => {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [matchData, setMatchData] = useState<any>(null);
+  const [maleRemedies, setMaleRemedies] = useState<any>(null);
+  const [femaleRemedies, setFemaleRemedies] = useState<any>(null);
+  const [resultTab, setResultTab] = useState<'match' | 'remedies'>('match');
+  const [remedyPerson, setRemedyPerson] = useState<'male' | 'female'>('male');
 
   // Result display states
   const [expandedPredictions, setExpandedPredictions] = useState<{ [key: string]: boolean }>({});
@@ -454,39 +449,42 @@ export const MatchCheckerScreen = ({ navigation }: any) => {
     setErrorMsg(null);
     setIsLoading(true);
 
-    const maleStdTime = `${maleTime} ${maleDate} +05:30`;
-    const femaleStdTime = `${femaleTime} ${femaleDate} +05:30`;
-
-    const requestPayload: MatchReportRequest = {
-      MaleBirthTime: {
-        StdTime: maleStdTime,
-        Location: {
-          Name: maleLocation,
-          Latitude: maleLat,
-          Longitude: maleLng
-        }
-      },
-      FemaleBirthTime: {
-        StdTime: femaleStdTime,
-        Location: {
-          Name: femaleLocation,
-          Latitude: femaleLat,
-          Longitude: femaleLng
-        }
-      },
-      Ayanamsa: ayanamsa
+    const formatDateToYYYYMMDD = (dateStr: string): string => {
+      const parts = dateStr.split('/');
+      if (parts.length === 3) {
+        return `${parts[2]}-${parts[1]}-${parts[0]}`;
+      }
+      return dateStr;
     };
 
+    const d1 = formatDateToYYYYMMDD(maleDate);
+    const d2 = formatDateToYYYYMMDD(femaleDate);
+    
+    const compatibilityUrl = `https://openkundali.com/api/v1/compatibility?date1=${d1}&time1=${maleTime}&lat1=${maleLat}&lon1=${maleLng}&date2=${d2}&time2=${femaleTime}&lat2=${femaleLat}&lon2=${femaleLng}`;
+    const maleRemediesUrl = `https://openkundali.com/api/v1/remedies?date=${d1}&time=${maleTime}&lat=${maleLat}&lon=${maleLng}`;
+    const femaleRemediesUrl = `https://openkundali.com/api/v1/remedies?date=${d2}&time=${femaleTime}&lat=${femaleLat}&lon=${femaleLng}`;
+
     try {
-      const response = await getMatchReport(requestPayload);
-      if (response?.Status === 'Pass' || response?.Payload?.MatchReport) {
-        setMatchData(response.Payload?.MatchReport || response.MatchReport);
+      console.log('[OpenKundali API] Fetching compatibility and remedies in parallel...');
+      
+      const [compatibilityRes, maleRemediesRes, femaleRemediesRes] = await Promise.all([
+        fetch(compatibilityUrl).then(r => r.ok ? r.json() : null),
+        fetch(maleRemediesUrl).then(r => r.ok ? r.json() : null),
+        fetch(femaleRemediesUrl).then(r => r.ok ? r.json() : null)
+      ]);
+
+      if (compatibilityRes && compatibilityRes.ashtakoota) {
+        setMatchData(compatibilityRes);
+        setMaleRemedies(maleRemediesRes);
+        setFemaleRemedies(femaleRemediesRes);
+        setResultTab('match'); // reset to match tab initially
         setScreenMode('result');
       } else {
-        setErrorMsg('Failed to fetch compatibility report. Please check API status.');
+        throw new Error('Invalid response structure from compatibility API.');
       }
     } catch (err: any) {
-      setErrorMsg(err.message || 'API request failed. Please check network connection.');
+      console.error('[OpenKundali API] Error:', err);
+      setErrorMsg(err.message || 'API request failed. Please check your internet connection.');
     } finally {
       setIsLoading(false);
     }
@@ -502,6 +500,48 @@ export const MatchCheckerScreen = ({ navigation }: any) => {
 
   // Filtered prediction list
   const filteredPredictions = useMemo(() => {
+    if (matchData?.ashtakoota?.kootas) {
+      // If we are using OpenKundali API
+      const list: any[] = [];
+      
+      // 1. Add Doshas as parameters
+      if (Array.isArray(matchData.ashtakoota.doshas)) {
+        matchData.ashtakoota.doshas.forEach((d: string) => {
+          const parts = d.split(' — ');
+          const title = parts[0] || 'Dosha Alert';
+          const desc = parts[1] || d;
+          list.push({
+            Name: title,
+            Description: desc,
+            Nature: 'Bad',
+            Score: null,
+            MaleInfo: matchData.person1?.moonSign ? `Moon Sign: ${matchData.person1.moonSign}` : null,
+            FemaleInfo: matchData.person2?.moonSign ? `Moon Sign: ${matchData.person2.moonSign}` : null,
+            Info: d
+          });
+        });
+      }
+
+      // 2. Add Synastry Highlights
+      if (matchData.synastry?.highlights && Array.isArray(matchData.synastry.highlights)) {
+        matchData.synastry.highlights.forEach((h: any) => {
+          list.push({
+            Name: h.label || 'Synastry Detail',
+            Description: h.description,
+            Nature: h.quality === 'positive' ? 'Good' : h.quality === 'negative' ? 'Bad' : 'Neutral',
+            Score: null,
+            MaleInfo: null,
+            FemaleInfo: null,
+            Info: h.description
+          });
+        });
+      }
+
+      // Filter by Nature
+      if (natureFilter === 'All') return list;
+      return list.filter(item => item.Nature === natureFilter);
+    }
+
     if (!matchData?.PredictionList) return [];
     
     return matchData.PredictionList.filter((item: any) => {
@@ -535,6 +575,20 @@ export const MatchCheckerScreen = ({ navigation }: any) => {
   const ashtakootaTable = useMemo(() => {
     if (!matchData) return [];
     
+    // If using the new OpenKundali response format
+    if (matchData.ashtakoota?.kootas) {
+      return matchData.ashtakoota.kootas.map((k: any) => {
+        return {
+          name: k.name,
+          desc: k.description || '',
+          male: '-',
+          female: '-',
+          max: k.maxPoints || 0,
+          received: k.scored || 0
+        };
+      });
+    }
+
     const embeddings = matchData.Embeddings || [];
     
     const kootaSpecs = [
@@ -578,10 +632,24 @@ export const MatchCheckerScreen = ({ navigation }: any) => {
   }, [matchData]);
 
   const ashtakootaTotal = useMemo(() => {
+    if (matchData?.ashtakoota?.totalScore !== undefined) {
+      return matchData.ashtakoota.totalScore;
+    }
     return ashtakootaTable.reduce((sum, item) => sum + item.received, 0);
-  }, [ashtakootaTable]);
+  }, [ashtakootaTable, matchData]);
 
   const matchVerdict = useMemo(() => {
+    if (matchData?.ashtakoota?.verdict) {
+      const verdict = matchData.ashtakoota.verdict;
+      let color = '#EF4444';
+      if (ashtakootaTotal >= 28) color = '#10B981';
+      else if (ashtakootaTotal >= 18) color = '#F59E0B';
+      return { 
+        status: verdict.toUpperCase(), 
+        color: color, 
+        summary: `OpenKundali compatibility verdict: ${verdict}` 
+      };
+    }
     if (ashtakootaTotal >= 28) {
       return { status: 'EXCELLENT', color: '#10B981', summary: 'Excellent compatibility, highly auspicious match!' };
     }
@@ -589,7 +657,7 @@ export const MatchCheckerScreen = ({ navigation }: any) => {
       return { status: 'PASS / GOOD', color: '#F59E0B', summary: 'Favourable compatibility, recommended to proceed.' };
     }
     return { status: 'FAIL / POOR', color: '#EF4444', summary: 'Critical mismatches in key areas (e.g. Nadi or Bhakut).' };
-  }, [ashtakootaTotal]);
+  }, [ashtakootaTotal, matchData]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -760,41 +828,6 @@ export const MatchCheckerScreen = ({ navigation }: any) => {
                 </View>
               </PremiumCard>
 
-              {/* AYANAMSA SELECTOR */}
-              <PremiumCard style={styles.ayanamsaCard}>
-                <View style={styles.ayanamsaHeader}>
-                  <Sliders color={colors.primary} size={18} />
-                  <Typography variant="body" weight="bold" style={{ marginLeft: 10 }}>Astrological Settings (Ayanamsa)</Typography>
-                </View>
-                
-                <View style={styles.ayanamsaGrid}>
-                  {AYANAMSA_OPTIONS.map((opt) => {
-                    const isSelected = ayanamsa === opt.value;
-                    return (
-                      <TouchableOpacity
-                        key={opt.value}
-                        onPress={() => setAyanamsa(opt.value)}
-                        style={[
-                          styles.ayanamsaChip,
-                          {
-                            borderColor: isSelected ? colors.primary : colors.border,
-                            backgroundColor: isSelected ? colors.primary + '15' : 'transparent'
-                          }
-                        ]}
-                      >
-                        <Typography 
-                          variant="caption" 
-                          weight="semibold" 
-                          style={{ color: isSelected ? colors.primary : colors.textSecondary }}
-                        >
-                          {opt.label}
-                        </Typography>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </PremiumCard>
-
               {/* CALCULATE BUTTON */}
               {isLoading ? (
                 <View style={styles.loadingContainer}>
@@ -803,7 +836,7 @@ export const MatchCheckerScreen = ({ navigation }: any) => {
                     Analyzing Compatibility...
                   </Typography>
                   <Typography variant="caption" color="muted" style={{ marginTop: 4, textAlign: 'center' }}>
-                    Fetching Guna Milan, Dosha Balances & planetary indicators.
+                    Calculating Guna Milan score & dosha balances.
                   </Typography>
                 </View>
               ) : (
@@ -842,288 +875,432 @@ export const MatchCheckerScreen = ({ navigation }: any) => {
                 </Typography>
               </TouchableOpacity>
 
-              {/* SCORE CARD */}
-              <PremiumCard style={styles.scoreCard}>
-                <View style={styles.scoreCardRow}>
-                  {/* Circular Score display */}
-                  <View style={[styles.scoreRing, { borderColor: colors.primary }]}>
-                    <LinearGradient
-                      colors={['#7A1124', '#D4AF37']}
-                      style={styles.scoreRingInner}
-                    >
-                      <Typography variant="display" style={{ color: '#FFF', fontSize: 32, lineHeight: 32 }}>
-                        {ashtakootaTotal}
-                      </Typography>
-                      <Typography variant="caption" style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10 }}>
-                        OUT OF 36
-                      </Typography>
-                    </LinearGradient>
-                  </View>
-
-                  <View style={styles.scoreDetailColumn}>
-                    {/* Status Badge */}
-                    <View 
-                      style={[
-                        styles.statusBadge, 
-                        { backgroundColor: matchVerdict.color }
-                      ]}
-                    >
-                      <Typography variant="caption" weight="bold" style={{ color: '#FFF' }}>
-                        {matchVerdict.status}
-                      </Typography>
-                    </View>
-
-                    <Typography variant="subtitle" weight="bold" style={{ marginTop: 8 }}>
-                      Guna Milan Score
-                    </Typography>
-                    <Typography variant="caption" color="muted" style={{ marginTop: 2 }}>
-                      {matchVerdict.summary}
-                    </Typography>
-                  </View>
-                </View>
-
-                {/* Male vs Female quick bio info */}
-                <View style={[styles.bioDivider, { backgroundColor: colors.border }]} />
-                <View style={styles.bioRow}>
-                  <View style={{ flex: 1 }}>
-                    <Typography variant="caption" weight="bold" color="primary">MALE CHART</Typography>
-                    <Typography variant="body" weight="semibold" numberOfLines={1}>{maleName}</Typography>
-                    <Typography variant="caption" color="muted" numberOfLines={1}>{maleLocation}</Typography>
-                  </View>
-                  <View style={styles.bioDividerVertical} />
-                  <View style={{ flex: 1, paddingLeft: 16 }}>
-                    <Typography variant="caption" weight="bold" color="secondary">FEMALE CHART</Typography>
-                    <Typography variant="body" weight="semibold" numberOfLines={1}>{femaleName}</Typography>
-                    <Typography variant="caption" color="muted" numberOfLines={1}>{femaleLocation}</Typography>
-                  </View>
-                </View>
-              </PremiumCard>
-
-              {/* TRADITIONAL ASHTAKOOTA TABLE */}
-              <PremiumCard style={styles.ashtakootaCard}>
-                <View style={styles.ashtakootaHeader}>
-                  <Sparkles color={colors.primary} size={18} />
-                  <Typography variant="body" weight="bold" style={{ marginLeft: 10 }}>
-                    Traditional Ashta Kuta Guna Milan
+              {/* SEGMENTED TAB CONTROL */}
+              <View style={[styles.tabContainer, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 }]}>
+                <TouchableOpacity 
+                  style={[styles.tabButton, resultTab === 'match' && { backgroundColor: colors.primary }]}
+                  onPress={() => setResultTab('match')}
+                >
+                  <Typography variant="body" weight="bold" style={{ color: resultTab === 'match' ? '#FFF' : colors.text }}>
+                    Compatibility Milan
                   </Typography>
-                </View>
+                </TouchableOpacity>
 
-                {/* Table Header */}
-                <View style={[styles.tableRow, styles.tableHeaderRow, { borderBottomColor: colors.border }]}>
-                  <View style={{ flex: 1.5 }}><Typography variant="caption" weight="bold" color="muted">Koota Attribute</Typography></View>
-                  <View style={{ flex: 1, alignItems: 'center' }}><Typography variant="caption" weight="bold" color="muted">Male</Typography></View>
-                  <View style={{ flex: 1, alignItems: 'center' }}><Typography variant="caption" weight="bold" color="muted">Female</Typography></View>
-                  <View style={{ flex: 1.2, alignItems: 'flex-end' }}><Typography variant="caption" weight="bold" color="muted">Points</Typography></View>
-                </View>
-
-                {/* Table Rows */}
-                {ashtakootaTable.map((item, idx) => (
-                  <View key={idx} style={[styles.tableRow, { borderBottomColor: colors.border + '30' }]}>
-                    <View style={{ flex: 1.5 }}>
-                      <Typography variant="body" weight="semibold" style={{ fontSize: 13 }}>{item.name}</Typography>
-                      <Typography variant="caption" color="muted" style={{ fontSize: 10, marginTop: 1 }}>{item.desc}</Typography>
-                    </View>
-                    <View style={{ flex: 1, alignItems: 'center' }}>
-                      <Typography variant="caption" weight="semibold" style={{ color: colors.text }}>{item.male}</Typography>
-                    </View>
-                    <View style={{ flex: 1, alignItems: 'center' }}>
-                      <Typography variant="caption" weight="semibold" style={{ color: colors.text }}>{item.female}</Typography>
-                    </View>
-                    <View style={{ flex: 1.2, alignItems: 'flex-end' }}>
-                      <Typography variant="body" weight="bold" color={item.received > 0 ? "primary" : "muted"} style={{ fontSize: 13 }}>
-                        {item.received} / {item.max}
-                      </Typography>
-                    </View>
-                  </View>
-                ))}
-
-                {/* Table Footer */}
-                <View style={[styles.tableTotalRow, { backgroundColor: colors.primary + '0a', borderColor: colors.border }]}>
-                  <View style={{ flex: 1 }}>
-                    <Typography variant="body" weight="bold">Total Milan Score</Typography>
-                    <Typography variant="caption" color="muted" style={{ fontSize: 10 }}>
-                      Minimum Required: 18 / 36
-                    </Typography>
-                  </View>
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Typography variant="body" weight="bold" color={ashtakootaTotal >= 18 ? "primary" : "secondary"}>
-                      {ashtakootaTotal} / 36 Points
-                    </Typography>
-                    <View style={[
-                      styles.minPassBadge, 
-                      { backgroundColor: ashtakootaTotal >= 18 ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)' }
-                    ]}>
-                      <Typography variant="caption" weight="bold" style={{ 
-                        color: ashtakootaTotal >= 18 ? '#10B981' : '#EF4444', 
-                        fontSize: 9,
-                        paddingHorizontal: 6,
-                        paddingVertical: 1,
-                      }}>
-                        {ashtakootaTotal >= 18 ? 'FAVOURABLE MATCH' : 'UNFAVOURABLE MATCH'}
-                      </Typography>
-                    </View>
-                  </View>
-                </View>
-
-                {/* Conclusion Text */}
-                <View style={styles.conclusionBox}>
-                  <Typography variant="caption" color="muted" weight="bold">CONCLUSION REPORT</Typography>
-                  <Typography variant="body" style={{ marginTop: 4, fontSize: 13, lineHeight: 18 }}>
-                    {ashtakootaTotal >= 18 
-                      ? `The match has scored ${ashtakootaTotal} points out of 36 points. This is a favourable Ashtakoota match exceeding the traditional minimum score of 18 points. Relationship compatibility and mutual understanding are recommended to proceed.` 
-                      : `The match has scored ${ashtakootaTotal} points out of 36 points. This is below the traditional recommended minimum score of 18 points. It is advised to review specific Nadi or Bhakut dosha cancellations.`
-                    }
+                <TouchableOpacity 
+                  style={[styles.tabButton, resultTab === 'remedies' && { backgroundColor: colors.primary }]}
+                  onPress={() => setResultTab('remedies')}
+                >
+                  <Typography variant="body" weight="bold" style={{ color: resultTab === 'remedies' ? '#FFF' : colors.text }}>
+                    Remedies & Guidance
                   </Typography>
-                </View>
-              </PremiumCard>
-
-              {/* FILTER CHIPS */}
-              <View style={styles.filterSection}>
-                <Typography variant="subtitle" weight="bold" style={{ marginBottom: 12 }}>
-                  Compatibility Parameters
-                </Typography>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer}>
-                  {(['All', 'Good', 'Neutral', 'Bad'] as const).map((filter) => {
-                    const isSelected = natureFilter === filter;
-                    return (
-                      <TouchableOpacity
-                        key={filter}
-                        onPress={() => setNatureFilter(filter)}
-                        style={[
-                          styles.filterChip,
-                          {
-                            borderColor: isSelected ? colors.primary : colors.border,
-                            backgroundColor: isSelected ? colors.primary + '18' : 'transparent'
-                          }
-                        ]}
-                      >
-                        <Typography 
-                          variant="caption" 
-                          weight="semibold"
-                          style={{ color: isSelected ? colors.primary : colors.textSecondary }}
-                        >
-                          {filter}
-                        </Typography>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
+                </TouchableOpacity>
               </View>
 
-              {/* DETAILED CARDS ACCORDION */}
-              {filteredPredictions.length === 0 ? (
-                <PremiumCard style={styles.noResultsCard}>
-                  <Info color={colors.textSecondary} size={24} />
-                  <Typography variant="body" color="muted" style={{ marginTop: 10, textAlign: 'center' }}>
-                    No compatibility parameters found matching filter "{natureFilter}".
-                  </Typography>
-                </PremiumCard>
-              ) : (
-                filteredPredictions.map((item: any, idx: number) => {
-                  const isExpanded = !!expandedPredictions[item.Name];
-                  const borderLeftColor = getNatureColor(item.Nature);
-                  const statusBg = getNatureBgColor(item.Nature);
-                  const statusText = item.Nature || 'Neutral';
-
-                  return (
-                    <PremiumCard 
-                      key={idx} 
+              {resultTab === 'remedies' ? (
+                <View>
+                  {/* Person Toggle Switch */}
+                  <View style={[styles.personSelectorContainer, { backgroundColor: isDark ? '#16161C' : '#F1F5F9' }]}>
+                    <TouchableOpacity 
+                      activeOpacity={0.8}
                       style={[
-                        styles.predictionCard, 
-                        { 
-                          borderLeftWidth: 4, 
-                          borderLeftColor,
-                          backgroundColor: statusBg
+                        styles.personSelectorTab, 
+                        remedyPerson === 'male' && { 
+                          backgroundColor: isDark ? '#1E1D2D' : '#FFF',
+                          shadowColor: '#000',
+                          shadowOffset: { width: 0, height: 2 },
+                          shadowOpacity: 0.1,
+                          shadowRadius: 4,
+                          elevation: 2,
                         }
                       ]}
-                      noPadding
+                      onPress={() => setRemedyPerson('male')}
                     >
-                      <TouchableOpacity
-                        onPress={() => togglePrediction(item.Name)}
-                        activeOpacity={0.7}
-                        style={styles.predictionTrigger}
-                      >
-                        <View style={{ flex: 1, paddingRight: 8 }}>
-                          <View style={styles.predictionTitleRow}>
-                            <Typography variant="body" weight="bold">{item.Name}</Typography>
-                            
-                            {/* Score info badge if available */}
-                            {typeof item.Score === 'number' && (
-                              <View style={[styles.scorePointBadge, { backgroundColor: colors.primary + '15' }]}>
-                                <Typography variant="caption" weight="bold" style={{ color: colors.primary, fontSize: 10 }}>
-                                  {item.Score} Pts
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <View style={[
+                          styles.genderIconBg, 
+                          { backgroundColor: remedyPerson === 'male' ? 'rgba(3, 105, 161, 0.15)' : 'transparent' }
+                        ]}>
+                          <User color={remedyPerson === 'male' ? '#0369A1' : colors.textSecondary} size={15} />
+                        </View>
+                        <Typography 
+                          variant="caption" 
+                          weight="bold" 
+                          style={{ 
+                            marginLeft: 8, 
+                            color: remedyPerson === 'male' ? '#0369A1' : colors.textSecondary 
+                          }}
+                        >
+                          {maleName} (Male)
+                        </Typography>
+                      </View>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity 
+                      activeOpacity={0.8}
+                      style={[
+                        styles.personSelectorTab, 
+                        remedyPerson === 'female' && { 
+                          backgroundColor: isDark ? '#1E1D2D' : '#FFF',
+                          shadowColor: '#000',
+                          shadowOffset: { width: 0, height: 2 },
+                          shadowOpacity: 0.1,
+                          shadowRadius: 4,
+                          elevation: 2,
+                        }
+                      ]}
+                      onPress={() => setRemedyPerson('female')}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <View style={[
+                          styles.genderIconBg, 
+                          { backgroundColor: remedyPerson === 'female' ? 'rgba(190, 24, 93, 0.15)' : 'transparent' }
+                        ]}>
+                          <User color={remedyPerson === 'female' ? '#BE185D' : colors.textSecondary} size={15} />
+                        </View>
+                        <Typography 
+                          variant="caption" 
+                          weight="bold" 
+                          style={{ 
+                            marginLeft: 8, 
+                            color: remedyPerson === 'female' ? '#BE185D' : colors.textSecondary 
+                          }}
+                        >
+                          {femaleName} (Female)
+                        </Typography>
+                      </View>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Recommendations list */}
+                  {(() => {
+                    const activeRemedies = remedyPerson === 'male' ? maleRemedies : femaleRemedies;
+                    if (!activeRemedies || !activeRemedies.recommendations || activeRemedies.recommendations.length === 0) {
+                      return (
+                        <PremiumCard style={{ paddingVertical: 40, alignItems: 'center', justifyContent: 'center' }}>
+                          <Typography variant="body" color="muted">No afflictions or remedies found for this birth chart.</Typography>
+                        </PremiumCard>
+                      );
+                    }
+
+                    return activeRemedies.recommendations.map((rec: any, idx: number) => {
+                      return (
+                        <PremiumCard key={idx} style={{ marginBottom: 16 }}>
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: colors.border + '30', paddingBottom: 10, marginBottom: 12 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                              <Typography variant="subtitle" weight="bold" color="primary">{rec.planet}</Typography>
+                              <View style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', borderRadius: 6, marginLeft: 8, paddingHorizontal: 6, paddingVertical: 2 }}>
+                                <Typography variant="caption" weight="bold" style={{ color: '#EF4444', fontSize: 10 }}>
+                                  Severity: {rec.totalSeverity}
+                                </Typography>
+                              </View>
+                            </View>
+                            {rec.deity ? (
+                              <Typography variant="caption" weight="semibold" color="muted">
+                                Deity: {rec.deity}
+                              </Typography>
+                            ) : null}
+                          </View>
+
+                          {/* Afflictions list */}
+                          {rec.afflictions && rec.afflictions.length > 0 && (
+                            <View style={{ marginBottom: 12 }}>
+                              <Typography variant="caption" color="muted" weight="bold" style={{ marginBottom: 4 }}>AFFLICTIONS</Typography>
+                              {rec.afflictions.map((aff: any, aIdx: number) => (
+                                <View key={aIdx} style={{ flexDirection: 'row', marginTop: 2, paddingLeft: 4 }}>
+                                  <Typography variant="caption" style={{ color: '#EF4444', marginRight: 6 }}>•</Typography>
+                                  <Typography variant="caption" style={{ flex: 1, lineHeight: 15 }}>{aff.description}</Typography>
+                                </View>
+                              ))}
+                            </View>
+                          )}
+
+                          {/* Details - Gemstone, Mantra, Donation, Fasting, Rudraksha */}
+                          <View style={{ gap: 10, borderTopWidth: 1, borderTopColor: colors.border + '20', paddingTop: 10 }}>
+                            {/* Gemstone */}
+                            {rec.gemstone && (
+                              <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+                                <Typography variant="caption" weight="bold" style={{ color: colors.primary, width: 95 }}>Gemstone:</Typography>
+                                <Typography variant="caption" style={{ flex: 1, lineHeight: 16 }}>
+                                  Wear a {rec.gemstone.primary} ({rec.gemstone.minCarats} carats min) on {rec.gemstone.finger} in {rec.gemstone.metal} on a {rec.gemstone.day}.
                                 </Typography>
                               </View>
                             )}
+
+                            {/* Mantra */}
+                            {rec.mantra && (
+                              <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+                                <Typography variant="caption" weight="bold" style={{ color: colors.primary, width: 95 }}>Mantra:</Typography>
+                                <View style={{ flex: 1 }}>
+                                  <Typography variant="caption" weight="semibold" style={{ fontStyle: 'italic', lineHeight: 16 }}>
+                                    "{rec.mantra.beej || rec.mantra.full}"
+                                  </Typography>
+                                  <Typography variant="caption" color="muted" style={{ marginTop: 2, lineHeight: 15 }}>
+                                    Chant {rec.mantra.repetitions?.toLocaleString()} times starting on {rec.mantra.startDay}.
+                                  </Typography>
+                                </View>
+                              </View>
+                            )}
+
+                            {/* Rudraksha */}
+                            {rec.rudraksha && (
+                              <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+                                <Typography variant="caption" weight="bold" style={{ color: colors.primary, width: 95 }}>Rudraksha:</Typography>
+                                <Typography variant="caption" style={{ flex: 1, lineHeight: 16 }}>
+                                  Wear a {rec.rudraksha.mukhi}-Mukhi Rudraksha (Deity: {rec.rudraksha.deity}). Benefits: {rec.rudraksha.benefits}.
+                                </Typography>
+                              </View>
+                            )}
+
+                            {/* Donation */}
+                            {rec.donation && (
+                              <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+                                <Typography variant="caption" weight="bold" style={{ color: colors.primary, width: 95 }}>Donation:</Typography>
+                                <Typography variant="caption" style={{ flex: 1, lineHeight: 16 }}>
+                                  Donate {rec.donation.items?.join(', ')} to {rec.donation.toWhom} on {rec.donation.day}s.
+                                </Typography>
+                              </View>
+                            )}
+
+                            {/* Fasting */}
+                            {rec.fasting && (
+                              <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+                                <Typography variant="caption" weight="bold" style={{ color: colors.primary, width: 95 }}>Fasting:</Typography>
+                                <Typography variant="caption" style={{ flex: 1, lineHeight: 15 }}>
+                                  {rec.fasting.protocol} on {rec.fasting.day}s.
+                                </Typography>
+                              </View>
+                            )}
+
+                            {/* Color */}
+                            {rec.color && (
+                              <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+                                <Typography variant="caption" weight="bold" style={{ color: colors.primary, width: 95 }}>Favorable Color:</Typography>
+                                <Typography variant="caption" style={{ flex: 1 }}>{rec.color}</Typography>
+                              </View>
+                            )}
                           </View>
-                          
-                          <Typography variant="caption" color="muted" style={{ marginTop: 4 }} numberOfLines={1}>
-                            {item.Description}
+                        </PremiumCard>
+                      );
+                    });
+                  })()}
+                </View>
+              ) : (
+                <View>
+                  {/* SCORE CARD */}
+                  <PremiumCard style={styles.scoreCard}>
+                    <View style={styles.scoreCardRow}>
+                      {/* Circular Score display */}
+                      <View style={[styles.scoreRing, { borderColor: colors.primary }]}>
+                        <LinearGradient
+                          colors={['#7A1124', '#D4AF37']}
+                          style={styles.scoreRingInner}
+                        >
+                          <Typography variant="display" style={{ color: '#FFF', fontSize: 32, lineHeight: 32 }}>
+                            {ashtakootaTotal}
+                          </Typography>
+                          <Typography variant="caption" style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10 }}>
+                            OUT OF 36
+                          </Typography>
+                        </LinearGradient>
+                      </View>
+
+                      <View style={styles.scoreDetailColumn}>
+                        {/* Status Badge */}
+                        <View 
+                          style={[
+                            styles.statusBadge, 
+                            { backgroundColor: matchVerdict.color }
+                          ]}
+                        >
+                          <Typography variant="caption" weight="bold" style={{ color: '#FFF' }}>
+                            {matchVerdict.status}
                           </Typography>
                         </View>
 
-                        <View style={styles.predictionRightRow}>
-                          <View style={[styles.naturePill, { backgroundColor: colors.surface }]}>
-                            <Typography variant="caption" weight="bold" style={{ color: borderLeftColor, fontSize: 10 }}>
-                              {statusText}
+                        <Typography variant="subtitle" weight="bold" style={{ marginTop: 8 }}>
+                          Guna Milan Score
+                        </Typography>
+                        <Typography variant="caption" color="muted" style={{ marginTop: 2 }}>
+                          {matchVerdict.summary}
+                        </Typography>
+                      </View>
+                    </View>
+
+                    {/* Male vs Female quick bio info */}
+                    <View style={[styles.bioDivider, { backgroundColor: colors.border }]} />
+                    <View style={styles.bioRow}>
+                      <View style={{ flex: 1 }}>
+                        <Typography variant="caption" weight="bold" color="primary">MALE CHART</Typography>
+                        <Typography variant="body" weight="semibold" numberOfLines={1}>{maleName}</Typography>
+                        <Typography variant="caption" color="muted" numberOfLines={1}>{maleLocation}</Typography>
+                        {matchData?.person1?.moonSign && (
+                          <Typography variant="caption" color="primary" weight="bold" style={{ marginTop: 4 }}>
+                            🌙 Moon Sign: {matchData.person1.moonSign}
+                          </Typography>
+                        )}
+                      </View>
+                      <View style={styles.bioDividerVertical} />
+                      <View style={{ flex: 1, paddingLeft: 16 }}>
+                        <Typography variant="caption" weight="bold" color="secondary">FEMALE CHART</Typography>
+                        <Typography variant="body" weight="semibold" numberOfLines={1}>{femaleName}</Typography>
+                        <Typography variant="caption" color="muted" numberOfLines={1}>{femaleLocation}</Typography>
+                        {matchData?.person2?.moonSign && (
+                          <Typography variant="caption" color="secondary" weight="bold" style={{ marginTop: 4 }}>
+                            🌙 Moon Sign: {matchData.person2.moonSign}
+                          </Typography>
+                        )}
+                      </View>
+                    </View>
+                  </PremiumCard>
+
+                  {/* TRADITIONAL ASHTAKOOTA TABLE */}
+                  <PremiumCard style={styles.ashtakootaCard}>
+                    <View style={styles.ashtakootaHeader}>
+                      <Sparkles color={colors.primary} size={18} />
+                      <Typography variant="body" weight="bold" style={{ marginLeft: 10 }}>
+                        Ashta Kuta Guna Milan Details
+                      </Typography>
+                    </View>
+
+                    {/* Table Header */}
+                    <View style={[styles.tableRow, styles.tableHeaderRow, { borderBottomColor: colors.border }]}>
+                      <View style={{ flex: 3.2 }}><Typography variant="caption" weight="bold" color="muted">Koota Attribute & Interpretation</Typography></View>
+                      <View style={{ flex: 0.8, alignItems: 'flex-end' }}><Typography variant="caption" weight="bold" color="muted">Points</Typography></View>
+                    </View>
+
+                    {/* Table Rows */}
+                    {ashtakootaTable.map((item, idx) => (
+                      <View key={idx} style={[styles.tableRow, { borderBottomColor: colors.border + '20', paddingVertical: 10 }]}>
+                        <View style={{ flex: 3.2, paddingRight: 10 }}>
+                          <Typography variant="body" weight="semibold" style={{ fontSize: 13 }}>{item.name}</Typography>
+                          {item.desc ? (
+                            <Typography variant="caption" color="muted" style={{ fontSize: 11, marginTop: 2, lineHeight: 15 }}>
+                              {item.desc}
                             </Typography>
-                          </View>
-                          {isExpanded ? (
-                            <ChevronDown color={colors.textSecondary} size={18} />
-                          ) : (
-                            <ChevronRight color={colors.textSecondary} size={18} />
-                          )}
-                        </View>
-                      </TouchableOpacity>
-
-                      {isExpanded && (
-                        <View style={[styles.predictionContent, { borderTopWidth: 1, borderTopColor: colors.border + '30', backgroundColor: colors.surface }]}>
-                          
-                          {/* Side-by-side or stacked Chart info comparison */}
-                          <View style={styles.genderComparisonRow}>
-                            {item.MaleInfo ? (
-                              <View style={[styles.genderInfoBox, { borderColor: colors.border + '30', backgroundColor: colors.background + '40' }]}>
-                                <View style={styles.genderBoxHeader}>
-                                  <User color="#0369A1" size={14} />
-                                  <Typography variant="caption" weight="bold" style={{ color: '#0369A1', marginLeft: 6 }}>Male Chart</Typography>
-                                </View>
-                                <Typography variant="caption" style={{ marginTop: 4, lineHeight: 16 }}>
-                                  {item.MaleInfo}
-                                </Typography>
-                              </View>
-                            ) : null}
-
-                            {item.FemaleInfo ? (
-                              <View style={[styles.genderInfoBox, { borderColor: colors.border + '30', backgroundColor: colors.background + '40' }]}>
-                                <View style={styles.genderBoxHeader}>
-                                  <User color="#BE185D" size={14} />
-                                  <Typography variant="caption" weight="bold" style={{ color: '#BE185D', marginLeft: 6 }}>Female Chart</Typography>
-                                </View>
-                                <Typography variant="caption" style={{ marginTop: 4, lineHeight: 16 }}>
-                                  {item.FemaleInfo}
-                                </Typography>
-                              </View>
-                            ) : null}
-                          </View>
-
-                          {/* Verdict Box */}
-                          {item.Info ? (
-                            <View style={[styles.verdictDetailBox, { backgroundColor: colors.primary + '08', borderColor: colors.primary + '20' }]}>
-                              <View style={styles.verdictHeaderRow}>
-                                <Sparkles color={colors.primary} size={14} />
-                                <Typography variant="caption" weight="bold" color="primary" style={{ marginLeft: 6 }}>Vedic Verdict</Typography>
-                              </View>
-                              <Typography variant="body" style={{ marginTop: 4, fontSize: 13, lineHeight: 18 }}>{item.Info}</Typography>
-                            </View>
                           ) : null}
                         </View>
-                      )}
+                        <View style={{ flex: 0.8, alignItems: 'flex-end', justifyContent: 'center' }}>
+                          <Typography variant="body" weight="bold" color={item.received > 0 ? "primary" : "muted"} style={{ fontSize: 13 }}>
+                            {item.received} / {item.max}
+                          </Typography>
+                        </View>
+                      </View>
+                    ))}
+
+                    {/* Table Footer */}
+                    <View style={[styles.tableTotalRow, { backgroundColor: colors.primary + '0d', borderColor: colors.border, marginTop: 16 }]}>
+                      <View style={{ flex: 1 }}>
+                        <Typography variant="body" weight="bold">Total Guna Milan Score</Typography>
+                        <Typography variant="caption" color="muted" style={{ fontSize: 10 }}>
+                          Minimum Recommended: 18 / 36
+                        </Typography>
+                      </View>
+                      <View style={{ alignItems: 'flex-end' }}>
+                        <Typography variant="body" weight="bold" color={ashtakootaTotal >= 18 ? "primary" : "secondary"}>
+                          {ashtakootaTotal} / 36 Points
+                        </Typography>
+                        <View style={[
+                          styles.minPassBadge, 
+                          { backgroundColor: ashtakootaTotal >= 18 ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)' }
+                        ]}>
+                          <Typography variant="caption" weight="bold" style={{ 
+                            color: ashtakootaTotal >= 18 ? '#10B981' : '#EF4444', 
+                            fontSize: 9,
+                            paddingHorizontal: 6,
+                            paddingVertical: 1.5,
+                          }}>
+                            {ashtakootaTotal >= 18 ? 'FAVOURABLE MATCH' : 'UNFAVOURABLE MATCH'}
+                          </Typography>
+                        </View>
+                      </View>
+                    </View>
+
+                    {/* Conclusion Text */}
+                    <View style={styles.conclusionBox}>
+                      <Typography variant="caption" color="muted" weight="bold">COMPATIBILITY SUMMARY</Typography>
+                      <Typography variant="body" style={{ marginTop: 4, fontSize: 12, lineHeight: 18 }}>
+                        {ashtakootaTotal >= 18 
+                          ? `This relationship shows a favourable Ashtakoota score of ${ashtakootaTotal}/36 points. OpenKundali verdict is "${matchData?.ashtakoota?.verdict || 'Pass'}". Compatibility is supportive in key areas. Proceeding is astrologically recommended.` 
+                          : `This relationship has an Ashtakoota score of ${ashtakootaTotal}/36 points, which falls below the recommended minimum of 18. OpenKundali verdict is "${matchData?.ashtakoota?.verdict || 'Fail'}". Check the specific Nadi or Bhakoot Dosha conditions below for potential remedies.`
+                        }
+                      </Typography>
+                    </View>
+                  </PremiumCard>
+
+                  {/* DOSHAS & REMEDIES CARD */}
+                  {matchData?.ashtakoota?.doshas && matchData.ashtakoota.doshas.length > 0 && (
+                    <PremiumCard style={[styles.ashtakootaCard, { borderColor: 'rgba(239, 68, 68, 0.3)', borderWidth: 1 }]}>
+                      <View style={styles.ashtakootaHeader}>
+                        <AlertCircle color="#EF4444" size={18} />
+                        <Typography variant="body" weight="bold" style={{ marginLeft: 10, color: '#EF4444' }}>
+                          Doshas & Concerns ({matchData.ashtakoota.doshas.length})
+                        </Typography>
+                      </View>
+                      <View style={{ gap: 10 }}>
+                        {matchData.ashtakoota.doshas.map((dosha: string, idx: number) => {
+                          const parts = dosha.split(' — ');
+                          const title = parts[0] || 'Dosha Alert';
+                          const desc = parts[1] || dosha;
+                          return (
+                            <View key={idx} style={{ borderLeftColor: '#EF4444', borderLeftWidth: 3, paddingLeft: 10, paddingVertical: 2 }}>
+                              <Typography variant="body" weight="bold" style={{ fontSize: 13, color: '#B91C1C' }}>{title}</Typography>
+                              <Typography variant="caption" color="muted" style={{ marginTop: 2, fontSize: 11, lineHeight: 16 }}>{desc}</Typography>
+                            </View>
+                          );
+                        })}
+                      </View>
                     </PremiumCard>
-                  );
-                })
+                  )}
+
+                  {/* SYNASTRY HIGHLIGHTS CARD */}
+                  {matchData?.synastry?.highlights && matchData.synastry.highlights.length > 0 && (
+                    <PremiumCard style={styles.ashtakootaCard}>
+                      <View style={styles.ashtakootaHeader}>
+                        <Sparkles color={colors.secondary} size={18} />
+                        <Typography variant="body" weight="bold" style={{ marginLeft: 10 }}>
+                          Synastry Highlights
+                        </Typography>
+                      </View>
+                      <View style={{ gap: 10 }}>
+                        {matchData.synastry.highlights.map((h: any, idx: number) => {
+                          const isNegative = h.quality === 'negative';
+                          const highlightColor = isNegative ? '#EF4444' : '#10B981';
+                          return (
+                            <View key={idx} style={{ borderLeftColor: highlightColor, borderLeftWidth: 3, paddingLeft: 10, paddingVertical: 2 }}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                <Typography variant="body" weight="bold" style={{ fontSize: 13, color: highlightColor }}>
+                                  {h.label}
+                                </Typography>
+                                <View style={[
+                                  styles.minPassBadge, 
+                                  { backgroundColor: isNegative ? 'rgba(239, 68, 68, 0.1)' : 'rgba(16, 185, 129, 0.1)', marginLeft: 8 }
+                                ]}>
+                                  <Typography variant="caption" weight="bold" style={{ 
+                                    color: highlightColor, 
+                                    fontSize: 9,
+                                    paddingHorizontal: 5,
+                                    paddingVertical: 1,
+                                  }}>
+                                    {h.quality?.toUpperCase() || 'INFO'}
+                                  </Typography>
+                                </View>
+                              </View>
+                              {h.description ? (
+                                <Typography variant="caption" color="muted" style={{ marginTop: 4, fontSize: 11, lineHeight: 16 }}>
+                                  {h.description}
+                                </Typography>
+                              ) : null}
+                            </View>
+                          );
+                        })}
+                      </View>
+                    </PremiumCard>
+                  )}
+                </View>
               )}
             </View>
           )}
+
 
           <View style={{ height: 110 }} />
         </ScrollView>
@@ -1226,6 +1403,40 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 20,
+  },
+  tabContainer: {
+    flexDirection: 'row',
+    borderRadius: 20,
+    padding: 4,
+    marginBottom: 20,
+  },
+  tabButton: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  personSelectorContainer: {
+    flexDirection: 'row',
+    borderRadius: 20,
+    padding: 6,
+    marginBottom: 20,
+    gap: 8,
+  },
+  personSelectorTab: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  genderIconBg: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   errorCard: {
     flexDirection: 'row',
