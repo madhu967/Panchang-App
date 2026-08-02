@@ -12,7 +12,7 @@ export type HoroscopeType = 'daily' | 'weekly' | 'monthly';
 
 export const ZODIAC_SIGNS = [
   { name: 'Aries', id: 'aries', emoji: '♈', dateRange: 'Mar 21 - Apr 19', element: 'Fire' },
-  { name: 'Taurus', id: 'taurus', emoji: 'taurus', dateRange: 'Apr 20 - May 20', element: 'Earth' }, // Wait, the emoji for Taurus was a string, let's fix it
+  { name: 'Taurus', id: 'taurus', emoji: '♉', dateRange: 'Apr 20 - May 20', element: 'Earth' },
   { name: 'Gemini', id: 'gemini', emoji: '♊', dateRange: 'May 21 - Jun 20', element: 'Air' },
   { name: 'Cancer', id: 'cancer', emoji: '♋', dateRange: 'Jun 21 - Jul 22', element: 'Water' },
   { name: 'Leo', id: 'leo', emoji: '♌', dateRange: 'Jul 23 - Aug 22', element: 'Fire' },

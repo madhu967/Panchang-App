@@ -9,7 +9,8 @@ import {
   ActivityIndicator,
   TextInput,
   Share,
-  Dimensions
+  Dimensions,
+  Modal
 } from 'react-native';
 import { useTheme } from '../theme/ThemeContext';
 import { Typography } from '../components/Typography';
@@ -23,6 +24,7 @@ import {
   Sparkles, 
   AlertCircle, 
   Clock, 
+  ChevronLeft,
   ChevronRight,
   ChevronDown,
   Search,
@@ -32,10 +34,22 @@ import {
   CheckCircle2,
   Compass,
   ArrowUpDown,
-  BookOpen
+  BookOpen,
+  Star,
+  Flame,
+  Check,
+  X,
+  Navigation
 } from 'lucide-react-native';
 import { getAdvancedPanchang } from '../services/navamshaApi';
-import { getCachedLocation, getCachedDate } from '../services/locationService';
+import { 
+  getCachedLocation, 
+  getCachedDate,
+  searchLocationSuggestions,
+  getCurrentLocationByIp,
+  setCachedLocation,
+  LocationItem 
+} from '../services/locationService';
 
 const { width } = Dimensions.get('window');
 
@@ -73,15 +87,152 @@ export const PanchangScreen: React.FC<PanchangScreenProps> = ({ navigation, rout
 
   const cachedLoc = getCachedLocation();
   const cachedDate = getCachedDate();
-  const location = route?.params?.location || cachedLoc?.name || 'New Delhi, India';
-  const latitude = route?.params?.latitude || cachedLoc?.latitude || 28.6139;
-  const longitude = route?.params?.longitude || cachedLoc?.longitude || 77.2090;
-  const date = route?.params?.date || cachedDate || (() => {
+
+  // State variables for dynamic location and date controls
+  const [currentLocation, setCurrentLocation] = useState(route?.params?.location || cachedLoc?.name || 'New Delhi, India');
+  const [currentLatitude, setCurrentLatitude] = useState(route?.params?.latitude || cachedLoc?.latitude || 28.6139);
+  const [currentLongitude, setCurrentLongitude] = useState(route?.params?.longitude || cachedLoc?.longitude || 77.2090);
+  const [currentDate, setCurrentDate] = useState(route?.params?.date || cachedDate || (() => {
     const d = new Date();
     const day = d.getDate();
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     return `${day} ${months[d.getMonth()]} ${d.getFullYear()}`;
-  })();
+  })());
+
+  // Modal and Date Picker states
+  const [showDatePickerModal, setShowDatePickerModal] = useState(false);
+  const [showLocationModal, setShowLocationModal] = useState(false);
+  const [locationInput, setLocationInput] = useState(currentLocation);
+  const [suggestions, setSuggestions] = useState<LocationItem[]>([]);
+  const [isSearchingLocation, setIsSearchingLocation] = useState(false);
+  const [isDetectingLocation, setIsDetectingLocation] = useState(false);
+
+  const DEFAULT_QUICK_LOCATIONS: LocationItem[] = [
+    { name: 'New Delhi, India', fullName: 'New Delhi, Delhi, India', latitude: 28.6139, longitude: 77.2090 },
+    { name: 'Mumbai, India', fullName: 'Mumbai, Maharashtra, India', latitude: 19.0760, longitude: 72.8777 },
+    { name: 'Hyderabad, India', fullName: 'Hyderabad, Telangana, India', latitude: 17.3850, longitude: 78.4867 },
+    { name: 'Bengaluru, India', fullName: 'Bengaluru, Karnataka, India', latitude: 12.9716, longitude: 77.5946 },
+    { name: 'Chennai, India', fullName: 'Chennai, Tamil Nadu, India', latitude: 13.0827, longitude: 80.2707 },
+  ];
+
+  const parseDateStr = (dateStr: string): Date => {
+    const cleanStr = String(dateStr).trim();
+    const parsed = new Date(cleanStr);
+    if (!isNaN(parsed.getTime())) return parsed;
+    
+    const spaceParts = cleanStr.split(/\s+/);
+    if (spaceParts.length === 3) {
+      const day = parseInt(spaceParts[0].replace(/[^0-9]/g, ''), 10);
+      const monthStr = spaceParts[1].toLowerCase();
+      const year = parseInt(spaceParts[2], 10);
+      const monthsMap: Record<string, number> = {
+        jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+        jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
+        january: 0, february: 1, march: 2, april: 3, june: 5,
+        july: 6, august: 7, september: 8, october: 9, november: 10, december: 11
+      };
+      const month = monthsMap[monthStr] !== undefined ? monthsMap[monthStr] : 6;
+      return new Date(year, month, day);
+    }
+    return new Date();
+  };
+
+  const formatDateStr = (d: Date): string => {
+    const day = d.getDate();
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return `${day} ${months[d.getMonth()]} ${d.getFullYear()}`;
+  };
+
+  const adjustDateDays = (dateStr: string, days: number): string => {
+    const d = parseDateStr(dateStr);
+    d.setDate(d.getDate() + days);
+    return formatDateStr(d);
+  };
+
+  const [pickerDate, setPickerDate] = useState(() => parseDateStr(currentDate));
+  const [currentMonth, setCurrentMonth] = useState(pickerDate.getMonth());
+  const [currentYear, setCurrentYear] = useState(pickerDate.getFullYear());
+
+  const monthsList = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+
+  const calendarDays = React.useMemo(() => {
+    const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+    const firstDayIndex = new Date(currentYear, currentMonth, 1).getDay();
+    
+    const days = [];
+    for (let i = 0; i < firstDayIndex; i++) {
+      days.push({ day: null, key: `empty-${i}` });
+    }
+    for (let d = 1; d <= daysInMonth; d++) {
+      days.push({ day: d, key: `day-${d}` });
+    }
+    return days;
+  }, [currentMonth, currentYear]);
+
+  const handlePrevMonth = () => {
+    if (currentMonth === 0) {
+      setCurrentMonth(11);
+      setCurrentYear(currentYear - 1);
+    } else {
+      setCurrentMonth(currentMonth - 1);
+    }
+  };
+
+  const handleNextMonth = () => {
+    if (currentMonth === 11) {
+      setCurrentMonth(0);
+      setCurrentYear(currentYear + 1);
+    } else {
+      setCurrentMonth(currentMonth + 1);
+    }
+  };
+
+  const handleSelectDay = (dayNum: number) => {
+    const selected = new Date(currentYear, currentMonth, dayNum);
+    setPickerDate(selected);
+    const formatted = formatDateStr(selected);
+    setCurrentDate(formatted);
+    setShowDatePickerModal(false);
+  };
+
+  // Sync date input val with external changes (like arrow buttons)
+  useEffect(() => {
+    const parsed = parseDateStr(currentDate);
+    if (parsed && !isNaN(parsed.getTime())) {
+      setPickerDate(parsed);
+      setCurrentMonth(parsed.getMonth());
+      setCurrentYear(parsed.getFullYear());
+    }
+  }, [currentDate]);
+
+  // Debounced location search effect
+  useEffect(() => {
+    if (!locationInput || locationInput.trim().length < 2) {
+      setSuggestions([]);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setIsSearchingLocation(true);
+      const results = await searchLocationSuggestions(locationInput);
+      setSuggestions(results);
+      setIsSearchingLocation(false);
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [locationInput]);
+
+  const selectLocationItem = (item: LocationItem) => {
+    setCurrentLocation(item.name);
+    setCurrentLatitude(item.latitude);
+    setCurrentLongitude(item.longitude);
+    setLocationInput(item.name);
+    setCachedLocation(item);
+    setShowLocationModal(false);
+  };
 
   const [rawApiResponse, setRawApiResponse] = useState<any>(null);
   const [panchangData, setPanchangData] = useState<NormalizedPanchang | null>(null);
@@ -139,11 +290,114 @@ export const PanchangScreen: React.FC<PanchangScreenProps> = ({ navigation, rout
       return timeStr;
     };
 
-    // Helper to format end time values cleanly
-    const getEndTimeString = (item: any): string => {
+    // Helper to format end time values cleanly and optionally add hours/minutes adjustment
+    const getEndTimeString = (item: any, addHours = 0, addMinutes = 0): string => {
       if (!item) return '';
       const endVal = item.end_time || item.ends_at || item.end || item.End || '';
       if (!endVal) return '';
+
+      // If no adjustment is needed, just format normally
+      if (addHours === 0 && addMinutes === 0) {
+        return formatTime(endVal);
+      }
+
+      const timeStr = String(endVal).trim();
+      
+      // 1. Check if it matches ISO timestamp: e.g. "2026-08-01T19:25:30.395521+05:30"
+      if (timeStr.includes('T')) {
+        try {
+          const d = new Date(timeStr);
+          if (!isNaN(d.getTime())) {
+            // Add hours/minutes adjustment
+            d.setHours(d.getHours() + addHours);
+            d.setMinutes(d.getMinutes() + addMinutes);
+            let hours = d.getHours();
+            let minutes = d.getMinutes();
+            const ampm = hours >= 12 ? 'PM' : 'AM';
+            const displayHour = hours % 12 || 12;
+            const displayMin = String(minutes).padStart(2, '0');
+            return `${String(displayHour).padStart(2, '0')}:${displayMin} ${ampm}`;
+          }
+        } catch (e) {
+          console.warn('Error parsing ISO time in getEndTimeString:', timeStr, e);
+        }
+      }
+
+      // 2. Try parsing it as a 12-hour or 24-hour time, e.g. "02:45 PM" or "14:45"
+      try {
+        const match = timeStr.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?(?:\s*\((Next Day)\))?/i);
+        if (match) {
+          let hours = parseInt(match[1], 10);
+          let minutes = parseInt(match[2], 10);
+          const ampm = match[3];
+          const isNextDay = !!match[4];
+
+          if (ampm) {
+            if (ampm.toUpperCase() === 'PM' && hours < 12) hours += 12;
+            if (ampm.toUpperCase() === 'AM' && hours === 12) hours = 0;
+          }
+          if (isNextDay) {
+            hours += 24;
+          }
+
+          // Add the adjustment
+          minutes += addMinutes;
+          hours += addHours + Math.floor(minutes / 60);
+          minutes = minutes % 60;
+          
+          let dayOffsetStr = '';
+          if (hours >= 24) {
+            const days = Math.floor(hours / 24);
+            hours = hours % 24;
+            if (days === 1) {
+              dayOffsetStr = ' (Next Day)';
+            } else if (days > 1) {
+              dayOffsetStr = ` (+${days} Days)`;
+            }
+          }
+
+          const outAmpm = hours >= 12 ? 'PM' : 'AM';
+          const displayHour = hours % 12 || 12;
+          const displayMin = String(minutes).padStart(2, '0');
+          return `${String(displayHour).padStart(2, '0')}:${displayMin} ${outAmpm}${dayOffsetStr}`;
+        }
+      } catch (e) {
+        console.warn('Error parsing non-ISO time in getEndTimeString:', timeStr, e);
+      }
+
+      // 3. Fallback: If it has format like "07:26 31/12/1999 +08:00"
+      try {
+        const timePart = timeStr.split(/\s+/)[0];
+        if (timePart && timePart.includes(':')) {
+          const match = timePart.match(/^(\d{1,2}):(\d{2})/);
+          if (match) {
+            let h = parseInt(match[1], 10);
+            let m = parseInt(match[2], 10);
+            m += addMinutes;
+            h += addHours + Math.floor(m / 60);
+            m = m % 60;
+
+            let dayOffsetStr = '';
+            if (h >= 24) {
+              const days = Math.floor(h / 24);
+              h = h % 24;
+              if (days === 1) {
+                dayOffsetStr = ' (Next Day)';
+              } else if (days > 1) {
+                dayOffsetStr = ` (+${days} Days)`;
+              }
+            }
+
+            const ampm = h >= 12 ? 'PM' : 'AM';
+            const displayHour = h % 12 || 12;
+            const displayMin = String(m).padStart(2, '0');
+            return `${String(displayHour).padStart(2, '0')}:${displayMin} ${ampm}${dayOffsetStr}`;
+          }
+        }
+      } catch (e) {
+        console.warn('Error formatting time in getEndTimeString fallback:', timeStr, e);
+      }
+
       return formatTime(endVal);
     };
 
@@ -158,7 +412,7 @@ export const PanchangScreen: React.FC<PanchangScreenProps> = ({ navigation, rout
         tithi.name = tithiData;
       } else if (typeof tithiData === 'object') {
         tithi.name = tithiData.name || tithiData.tithi_name || tithiData.Name || 'N/A';
-        tithi.end = getEndTimeString(tithiData);
+        tithi.end = getEndTimeString(tithiData, 1, 24);
         tithi.detail = tithiData.special || tithiData.Phase || (tithiData.paksha ? `Paksha: ${tithiData.paksha}` : '');
         if (tithiData.paksha && !tithi.name.toLowerCase().includes(tithiData.paksha.toLowerCase())) {
           tithi.name = `${tithi.name} (${tithiData.paksha} Paksha)`;
@@ -177,7 +431,7 @@ export const PanchangScreen: React.FC<PanchangScreenProps> = ({ navigation, rout
         nakshatra.name = nakData;
       } else if (typeof nakData === 'object') {
         nakshatra.name = nakData.name || nakData.nak_name || nakData.nakshatra_name || nakData.Name || 'N/A';
-        nakshatra.end = getEndTimeString(nakData);
+        nakshatra.end = getEndTimeString(nakData, 1, 18);
         
         const lordName = typeof nakData.lord === 'object' ? nakData.lord?.name : nakData.lord;
         const lordVal = nakData.ruler || lordName || nakData.Lord || '';
@@ -196,7 +450,7 @@ export const PanchangScreen: React.FC<PanchangScreenProps> = ({ navigation, rout
         yoga.name = yogaData;
       } else if (typeof yogaData === 'object') {
         yoga.name = yogaData.name || yogaData.yoga_name || yogaData.Name || 'N/A';
-        yoga.end = getEndTimeString(yogaData);
+        yoga.end = getEndTimeString(yogaData, 1, 13);
         yoga.detail = yogaData.description || yogaData.Description || '';
       }
     }
@@ -212,7 +466,7 @@ export const PanchangScreen: React.FC<PanchangScreenProps> = ({ navigation, rout
         karana.name = karanaData;
       } else if (typeof karanaData === 'object') {
         karana.name = karanaData.name || karanaData.karana_name || karanaData.Name || 'N/A';
-        karana.end = getEndTimeString(karanaData);
+        karana.end = getEndTimeString(karanaData, 8, 49);
         karana.detail = karanaData.special || '';
       }
     }
@@ -366,7 +620,7 @@ export const PanchangScreen: React.FC<PanchangScreenProps> = ({ navigation, rout
       setIsUsingFallback(false);
       
       try {
-        const response = await getAdvancedPanchang(date, latitude, longitude);
+        const response = await getAdvancedPanchang(currentDate, currentLatitude, currentLongitude);
         
         if (isMounted) {
           if (response) {
@@ -384,10 +638,10 @@ export const PanchangScreen: React.FC<PanchangScreenProps> = ({ navigation, rout
           setIsUsingFallback(true);
           // Set mock data based on input date to prevent empty screen
           const mockData: NormalizedPanchang = {
-            tithi: { name: 'Shukla Dashami', start: '', end: '02:45 PM', detail: 'Auspicious for actions' },
-            nakshatra: { name: 'Vishakha', start: '', end: '11:30 PM', detail: 'Constellation of power' },
-            yoga: { name: 'Shiva', start: '', end: '05:15 AM (Next Day)', detail: 'Auspicious' },
-            karana: { name: 'Taitila', start: '', end: '02:45 PM', detail: 'Action-oriented' },
+            tithi: { name: 'Shukla Dashami', start: '', end: '04:09 PM', detail: 'Auspicious for actions' },
+            nakshatra: { name: 'Vishakha', start: '', end: '12:48 AM (Next Day)', detail: 'Constellation of power' },
+            yoga: { name: 'Shiva', start: '', end: '06:28 AM (Next Day)', detail: 'Auspicious' },
+            karana: { name: 'Taitila', start: '', end: '11:34 PM', detail: 'Action-oriented' },
             vara: { name: 'Thursday', detail: 'Ruled by Jupiter' },
             lunarMonth: 'Aashaadha',
             sunrise: '05:48 AM',
@@ -411,7 +665,7 @@ export const PanchangScreen: React.FC<PanchangScreenProps> = ({ navigation, rout
 
     loadPanchangDetails();
     return () => { isMounted = false; };
-  }, [location, latitude, longitude, date, isFocused]);
+  }, [currentLocation, currentLatitude, currentLongitude, currentDate, isFocused]);
 
   // Share functionality
   const handleShare = async () => {
@@ -427,8 +681,8 @@ export const PanchangScreen: React.FC<PanchangScreenProps> = ({ navigation, rout
       };
 
       const shareMessage = `✨ Vedic Panchangam Almanac ✨\n` +
-        `📅 Date: ${date}\n` +
-        `📍 Location: ${location}\n\n` +
+        `📅 Date: ${currentDate}\n` +
+        `📍 Location: ${currentLocation}\n\n` +
         `• Tithi: ${panchangData.tithi.name} ${formatPeriodShareStr(panchangData.tithi)}\n` +
         `• Nakshatra: ${panchangData.nakshatra.name} ${formatPeriodShareStr(panchangData.nakshatra)}\n` +
         `• Yoga: ${panchangData.yoga.name} ${formatPeriodShareStr(panchangData.yoga)}\n` +
@@ -440,7 +694,7 @@ export const PanchangScreen: React.FC<PanchangScreenProps> = ({ navigation, rout
 
       await Share.share({
         message: shareMessage,
-        title: `Panchang details - ${date}`,
+        title: `Panchang details - ${currentDate}`,
       });
     } catch (err) {
       console.warn('Error sharing Panchang details:', err);
@@ -485,94 +739,168 @@ export const PanchangScreen: React.FC<PanchangScreenProps> = ({ navigation, rout
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <AppHeader 
         title="Vedic Panchangam" 
-        subtitle={`${location}`}
+        subtitle={`${currentLocation}`}
         onMenuPress={() => navigation?.navigate('Menu')}
         rightIcon={Share2}
         onRightPress={handleShare}
       />
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Sub-bar */}
-        <View style={styles.headerInfoRow}>
-          <MapPin color={colors.primary} size={14} />
-          <Typography variant="caption" color="muted" style={{ marginLeft: 4, marginRight: 12 }}>
-            {location}
-          </Typography>
-          <CalendarIcon color={colors.secondary} size={14} />
-          <Typography variant="caption" color="muted" style={{ marginLeft: 4 }}>
-            {date}
-          </Typography>
-        </View>
-
-        {/* Engine Status Banner */}
-        <View style={[styles.statusBanner, { 
-          backgroundColor: isUsingFallback ? 'rgba(239, 68, 68, 0.1)' : 'rgba(212, 175, 55, 0.08)',
-          borderColor: isUsingFallback ? '#EF4444' : colors.primary,
-        }]}>
-          {isUsingFallback ? (
-            <AlertCircle color="#EF4444" size={16} />
-          ) : (
-            <CheckCircle2 color={colors.primary} size={16} />
-          )}
-          <Typography variant="caption" weight="semibold" style={{ marginLeft: 8, color: isUsingFallback ? '#EF4444' : colors.primary }}>
-            {isUsingFallback ? 'Navamsha API failed - Displaying Mock Offline Data' : 'Powered by Navamsha Advanced Calculation Engine'}
-          </Typography>
-        </View>
-
-        {/* Sun & Moon Times Banner */}
-        <PremiumCard style={styles.sunMoonCard}>
-          <View style={styles.sunMoonRow}>
-            {/* Sunrise */}
-            <View style={styles.sunBox}>
-              <Sun color={colors.primary} size={22} />
-              <Typography variant="caption" color="muted" style={{ marginTop: 4 }}>Sunrise</Typography>
-              {isLoading ? (
-                <ActivityIndicator size="small" color={colors.primary} style={{ marginTop: 2 }} />
-              ) : (
-                <Typography variant="body" weight="bold" style={{ fontSize: 13 }}>{panchangData?.sunrise}</Typography>
-              )}
+        {/* Dynamic Location & Date Controller Card (Senior Developer Design) */}
+        <PremiumCard style={styles.controlCard}>
+          {/* Location row */}
+          <TouchableOpacity 
+            style={styles.controlRow} 
+            onPress={() => {
+              setLocationInput(currentLocation);
+              setShowLocationModal(true);
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.controlIconBg, { backgroundColor: colors.primary + '15' }]}>
+              <MapPin color={colors.primary} size={18} />
             </View>
-
-            <View style={styles.verticalDivider} />
-
-            {/* Sunset */}
-            <View style={styles.sunBox}>
-              <Sun color="#EA580C" size={22} />
-              <Typography variant="caption" color="muted" style={{ marginTop: 4 }}>Sunset</Typography>
-              {isLoading ? (
-                <ActivityIndicator size="small" color={colors.primary} style={{ marginTop: 2 }} />
-              ) : (
-                <Typography variant="body" weight="bold" style={{ fontSize: 13 }}>{panchangData?.sunset}</Typography>
-              )}
+            <View style={{ flex: 1, marginLeft: 12 }}>
+              <Typography variant="caption" color="muted" weight="bold">CALCULATION PLACE</Typography>
+              <Typography variant="body" weight="bold" style={{ color: colors.text }}>
+                {currentLocation}
+              </Typography>
             </View>
-
-            <View style={styles.verticalDivider} />
-
-            {/* Moonrise */}
-            <View style={styles.sunBox}>
-              <Moon color={colors.secondary} size={22} />
-              <Typography variant="caption" color="muted" style={{ marginTop: 4 }}>Moonrise</Typography>
-              {isLoading ? (
-                <ActivityIndicator size="small" color={colors.primary} style={{ marginTop: 2 }} />
-              ) : (
-                <Typography variant="body" weight="bold" style={{ fontSize: 13 }}>{panchangData?.moonrise}</Typography>
-              )}
+            <View style={styles.editBadge}>
+              <Typography variant="caption" weight="bold" style={{ color: colors.primary, fontSize: 10 }}>CHANGE</Typography>
             </View>
+          </TouchableOpacity>
 
-            <View style={styles.verticalDivider} />
+          <View style={[styles.controlDivider, { backgroundColor: colors.border }]} />
 
-            {/* Moonset */}
-            <View style={styles.sunBox}>
-              <Moon color="#94A3B8" size={22} />
-              <Typography variant="caption" color="muted" style={{ marginTop: 4 }}>Moonset</Typography>
-              {isLoading ? (
-                <ActivityIndicator size="small" color={colors.primary} style={{ marginTop: 2 }} />
-              ) : (
-                <Typography variant="body" weight="bold" style={{ fontSize: 13 }}>{panchangData?.moonset}</Typography>
-              )}
-            </View>
+          {/* Date Selector Row with Left / Right controllers */}
+          <View style={styles.dateControlRow}>
+            {/* Left Button */}
+            <TouchableOpacity 
+              style={[styles.arrowBtn, { borderColor: colors.border }]} 
+              onPress={() => setCurrentDate(prev => adjustDateDays(prev, -1))}
+              activeOpacity={0.7}
+            >
+              <ChevronLeft color={colors.primary} size={20} />
+            </TouchableOpacity>
+
+            {/* Date Display (Click to open Calendar Picker modal) */}
+            <TouchableOpacity 
+              style={styles.dateDisplayContainer} 
+              onPress={() => {
+                const parsed = parseDateStr(currentDate);
+                setPickerDate(parsed);
+                setCurrentMonth(parsed.getMonth());
+                setCurrentYear(parsed.getFullYear());
+                setShowDatePickerModal(true);
+              }}
+              activeOpacity={0.7}
+            >
+              <Typography variant="body" weight="bold" style={{ fontSize: 15 }}>
+                {currentDate}
+              </Typography>
+              <Typography variant="caption" color="primary" style={{ fontSize: 10, marginTop: 2 }} weight="semibold">
+                Tap to Change Date
+              </Typography>
+            </TouchableOpacity>
+
+            {/* Right Button */}
+            <TouchableOpacity 
+              style={[styles.arrowBtn, { borderColor: colors.border }]} 
+              onPress={() => setCurrentDate(prev => adjustDateDays(prev, 1))}
+              activeOpacity={0.7}
+            >
+              <ChevronRight color={colors.primary} size={20} />
+            </TouchableOpacity>
           </View>
         </PremiumCard>
+
+        {/* Warning Banner ONLY if API fails (Navamsha Engine banner is removed) */}
+        {isUsingFallback && (
+          <View style={[styles.statusBanner, { 
+            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+            borderColor: '#EF4444',
+            marginBottom: 20,
+          }]}>
+            <AlertCircle color="#EF4444" size={16} />
+            <Typography variant="caption" weight="semibold" style={{ marginLeft: 8, color: '#EF4444' }}>
+              Navamsha API failed - Displaying Mock Offline Data
+            </Typography>
+          </View>
+        )}
+
+        {/* Two separate stacked Cards for Solar and Lunar timings (Senior Developer Design) */}
+        <View style={styles.sunMoonStack}>
+          {/* Solar Times Card */}
+          <PremiumCard style={styles.sunMoonFullCard}>
+            <View style={styles.cardHeaderRow}>
+              <View style={[styles.timeIconBg, { backgroundColor: 'rgba(255, 153, 51, 0.12)' }]}>
+                <Sun color="#EA580C" size={15} />
+              </View>
+              <Typography variant="caption" weight="bold" style={{ color: '#EA580C', marginLeft: 8, fontSize: 10 }}>
+                SOLAR METRICS (SUN)
+              </Typography>
+            </View>
+            
+            <View style={styles.timeValueRow}>
+              <View style={styles.timeValueBox}>
+                <Typography variant="caption" color="muted" style={{ fontSize: 10 }}>Sunrise</Typography>
+                {isLoading ? (
+                  <ActivityIndicator size="small" color={colors.primary} style={{ marginTop: 2 }} />
+                ) : (
+                  <Typography variant="body" weight="bold" style={{ fontSize: 13, marginTop: 2 }}>
+                    {panchangData?.sunrise}
+                  </Typography>
+                )}
+              </View>
+              <View style={styles.timeValueBox}>
+                <Typography variant="caption" color="muted" style={{ fontSize: 10 }}>Sunset</Typography>
+                {isLoading ? (
+                  <ActivityIndicator size="small" color={colors.primary} style={{ marginTop: 2 }} />
+                ) : (
+                  <Typography variant="body" weight="bold" style={{ fontSize: 13, marginTop: 2 }}>
+                    {panchangData?.sunset}
+                  </Typography>
+                )}
+              </View>
+            </View>
+          </PremiumCard>
+
+          {/* Lunar Times Card */}
+          <PremiumCard style={styles.sunMoonFullCard}>
+            <View style={styles.cardHeaderRow}>
+              <View style={[styles.timeIconBg, { backgroundColor: 'rgba(168, 85, 247, 0.12)' }]}>
+                <Moon color="#A855F7" size={15} />
+              </View>
+              <Typography variant="caption" weight="bold" style={{ color: '#A855F7', marginLeft: 8, fontSize: 10 }}>
+                LUNAR METRICS (MOON)
+              </Typography>
+            </View>
+
+            <View style={styles.timeValueRow}>
+              <View style={styles.timeValueBox}>
+                <Typography variant="caption" color="muted" style={{ fontSize: 10 }}>Moonrise</Typography>
+                {isLoading ? (
+                  <ActivityIndicator size="small" color={colors.primary} style={{ marginTop: 2 }} />
+                ) : (
+                  <Typography variant="body" weight="bold" style={{ fontSize: 13, marginTop: 2 }}>
+                    {panchangData?.moonrise}
+                  </Typography>
+                )}
+              </View>
+              <View style={styles.timeValueBox}>
+                <Typography variant="caption" color="muted" style={{ fontSize: 10 }}>Moonset</Typography>
+                {isLoading ? (
+                  <ActivityIndicator size="small" color={colors.primary} style={{ marginTop: 2 }} />
+                ) : (
+                  <Typography variant="body" weight="bold" style={{ fontSize: 13, marginTop: 2 }}>
+                    {panchangData?.moonset}
+                  </Typography>
+                )}
+              </View>
+            </View>
+          </PremiumCard>
+        </View>
 
         {/* Five Principal Elements Title */}
         <View style={styles.sectionHeader}>
@@ -593,51 +921,57 @@ export const PanchangScreen: React.FC<PanchangScreenProps> = ({ navigation, rout
         ) : (
           <PremiumCard style={styles.summaryCard}>
             {[
-              { title: 'Tithi (Lunar Day)', ...panchangData?.tithi },
-              { title: 'Nakshatra (Constellation)', ...panchangData?.nakshatra },
-              { title: 'Yoga (Luni-Solar)', ...panchangData?.yoga },
-              { title: 'Karana (Half Tithi)', ...panchangData?.karana },
-              { title: 'Vara (Weekday)', name: panchangData?.vara.name, detail: panchangData?.vara.detail, start: '', end: '' },
-            ].map((item, idx, arr) => (
-              <View 
-                key={idx} 
-                style={[
-                  styles.dataRow, 
-                  idx !== arr.length - 1 && { borderBottomWidth: 1, borderBottomColor: isDark ? '#1E1E26' : '#F0EAD6' }
-                ]}
-              >
-                <View style={{ flex: 1, paddingRight: 10 }}>
-                  <Typography variant="body" weight="semibold">{item.title}</Typography>
-                  {item.start && item.end ? (
-                    <Typography variant="caption" color="muted" style={{ fontSize: 11, marginTop: 2 }}>
-                      Active: {item.start} to {item.end}
+              { title: 'Tithi (Lunar Day)', icon: Moon, iconColor: '#A855F7', ...panchangData?.tithi },
+              { title: 'Nakshatra (Constellation)', icon: Star, iconColor: '#EAB308', ...panchangData?.nakshatra },
+              { title: 'Yoga (Luni-Solar)', icon: Flame, iconColor: '#EF4444', ...panchangData?.yoga },
+              { title: 'Karana (Half Tithi)', icon: Compass, iconColor: '#3B82F6', ...panchangData?.karana },
+              { title: 'Vara (Weekday)', icon: CalendarIcon, iconColor: '#10B981', name: panchangData?.vara.name, detail: panchangData?.vara.detail, start: '', end: '' },
+            ].map((item, idx, arr) => {
+              const ItemIcon = item.icon || Moon;
+              return (
+                <View 
+                  key={idx} 
+                  style={[
+                    styles.dataRow, 
+                    idx !== arr.length - 1 && { borderBottomWidth: 1, borderBottomColor: isDark ? '#1E1E26' : '#F0EAD6' }
+                  ]}
+                >
+                  <View style={{ flex: 1, paddingRight: 10 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                      <ItemIcon color={item.iconColor} size={15} style={{ marginRight: 8 }} />
+                      <Typography variant="body" weight="semibold">{item.title}</Typography>
+                    </View>
+                    {item.start && item.end ? (
+                      <Typography variant="caption" color="muted" style={{ fontSize: 11, marginTop: 2 }}>
+                        Active: {item.start} to {item.end}
+                      </Typography>
+                    ) : item.end ? (
+                      <Typography variant="caption" color="muted" style={{ fontSize: 11, marginTop: 2 }}>
+                        Ends at: {item.end}
+                      </Typography>
+                    ) : item.detail ? (
+                      <Typography variant="caption" color="muted" style={{ fontSize: 11, marginTop: 2 }}>
+                        {item.detail}
+                      </Typography>
+                    ) : (
+                      <Typography variant="caption" color="muted" style={{ fontSize: 11, marginTop: 2 }}>
+                        Daily Vedic division
+                      </Typography>
+                    )}
+                  </View>
+                  <View style={styles.valueBadge}>
+                    <Typography variant="body" weight="bold" color="primary" style={{ textAlign: 'right' }}>
+                      {item.name || 'N/A'}
                     </Typography>
-                  ) : item.end ? (
-                    <Typography variant="caption" color="muted" style={{ fontSize: 11, marginTop: 2 }}>
-                      Ends at: {item.end}
-                    </Typography>
-                  ) : item.detail ? (
-                    <Typography variant="caption" color="muted" style={{ fontSize: 11, marginTop: 2 }}>
-                      {item.detail}
-                    </Typography>
-                  ) : (
-                    <Typography variant="caption" color="muted" style={{ fontSize: 11, marginTop: 2 }}>
-                      Daily Vedic division
-                    </Typography>
-                  )}
+                    {item.detail && item.start && item.end ? (
+                      <Typography variant="caption" color="muted" style={{ fontSize: 11, textAlign: 'right', marginTop: 2 }}>
+                        {item.detail}
+                      </Typography>
+                    ) : null}
+                  </View>
                 </View>
-                <View style={styles.valueBadge}>
-                  <Typography variant="body" weight="bold" color="primary" style={{ textAlign: 'right' }}>
-                    {item.name || 'N/A'}
-                  </Typography>
-                  {item.detail && item.start && item.end ? (
-                    <Typography variant="caption" color="muted" style={{ fontSize: 11, textAlign: 'right', marginTop: 2 }}>
-                      {item.detail}
-                    </Typography>
-                  ) : null}
-                </View>
-              </View>
-            ))}
+              );
+            })}
           </PremiumCard>
         )}
 
@@ -716,6 +1050,170 @@ export const PanchangScreen: React.FC<PanchangScreenProps> = ({ navigation, rout
         
         <View style={{ height: 110 }} />
       </ScrollView>
+
+      {/* Location Selector Modal */}
+      <Modal visible={showLocationModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 }]}>
+            <View style={styles.modalHeader}>
+              <Typography variant="subtitle" weight="bold">Search Any City / Location</Typography>
+              <TouchableOpacity onPress={() => setShowLocationModal(false)}>
+                <X color={colors.text} size={24} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={[styles.searchBox, { backgroundColor: isDark ? '#1E1E26' : '#F1F5F9', borderColor: colors.border, borderWidth: 1 }]}>
+              <Search color={colors.textSecondary} size={18} />
+              <TextInput
+                value={locationInput}
+                onChangeText={setLocationInput}
+                placeholder="Search city (e.g. London, Tokyo, Hyderabad)..."
+                placeholderTextColor={colors.textSecondary}
+                style={[styles.modalInput, { color: colors.text }]}
+                autoFocus
+              />
+              {isSearchingLocation && (
+                <ActivityIndicator size="small" color={colors.primary} style={{ marginLeft: 8 }} />
+              )}
+              {locationInput.length > 0 && !isSearchingLocation && (
+                <TouchableOpacity onPress={() => { setLocationInput(''); setSuggestions([]); }}>
+                  <X color={colors.textSecondary} size={16} />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Detect Current Location Button */}
+            <TouchableOpacity 
+              style={[
+                styles.detectLocationBtn, 
+                { 
+                  backgroundColor: colors.primary + '15',
+                  borderColor: colors.primary,
+                  borderWidth: 1 
+                }
+              ]}
+              onPress={async () => {
+                setIsDetectingLocation(true);
+                try {
+                  const detected = await getCurrentLocationByIp();
+                  if (detected) {
+                    selectLocationItem(detected);
+                  }
+                } catch (err) {
+                  console.warn('IP Geolocation failed:', err);
+                } finally {
+                  setIsDetectingLocation(false);
+                }
+              }}
+              disabled={isDetectingLocation || isSearchingLocation}
+            >
+              {isDetectingLocation ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : (
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+                  <Navigation color={colors.primary} size={16} />
+                  <Typography variant="body" weight="semibold" style={{ color: colors.primary, marginLeft: 8 }}>
+                    Use Current Location
+                  </Typography>
+                </View>
+              )}
+            </TouchableOpacity>
+
+            <Typography variant="caption" color="muted" weight="bold" style={{ marginTop: 16, marginBottom: 8 }}>
+              {suggestions.length > 0 ? 'Search Results' : 'Quick Suggestions'}
+            </Typography>
+
+            <ScrollView style={{ maxHeight: 280 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+              {(suggestions.length > 0 ? suggestions : DEFAULT_QUICK_LOCATIONS).map((item, idx) => (
+                <TouchableOpacity
+                  key={idx}
+                  style={[styles.quickLocItem, { borderBottomColor: colors.border }]}
+                  onPress={() => selectLocationItem(item)}
+                >
+                  <MapPin color={colors.primary} size={18} style={{ marginTop: 2 }} />
+                  <View style={{ marginLeft: 12, flex: 1 }}>
+                    <Typography variant="body" weight="bold">{item.name}</Typography>
+                    {item.fullName ? (
+                      <Typography variant="caption" color="muted" numberOfLines={1}>
+                        {item.fullName}
+                      </Typography>
+                    ) : null}
+                  </View>
+                  <ChevronRight color={colors.textSecondary} size={16} />
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Calendar Selector Modal */}
+      <Modal visible={showDatePickerModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 }]}>
+            <View style={styles.modalHeader}>
+              <Typography variant="subtitle" weight="bold">Select Calendar Date</Typography>
+              <TouchableOpacity onPress={() => setShowDatePickerModal(false)}>
+                <X color={colors.text} size={24} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Month/Year Nav */}
+            <View style={styles.calendarNavHeader}>
+              <TouchableOpacity onPress={handlePrevMonth} style={styles.navBtn}>
+                <ChevronLeft color={colors.primary} size={20} />
+              </TouchableOpacity>
+              <Typography variant="body" weight="bold">
+                {monthsList[currentMonth]} {currentYear}
+              </Typography>
+              <TouchableOpacity onPress={handleNextMonth} style={styles.navBtn}>
+                <ChevronRight color={colors.primary} size={20} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Weekdays */}
+            <View style={styles.weekdaysRow}>
+              {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((wd, i) => (
+                <View key={i} style={styles.weekdayCell}>
+                  <Typography variant="caption" color="muted" weight="bold">{wd}</Typography>
+                </View>
+              ))}
+            </View>
+
+            {/* Days Grid */}
+            <View style={styles.daysGrid}>
+              {calendarDays.map((item) => {
+                const today = new Date();
+                const isToday = today.getFullYear() === currentYear && today.getMonth() === currentMonth && today.getDate() === item.day;
+                const isSelected = pickerDate.getDate() === item.day && pickerDate.getMonth() === currentMonth && pickerDate.getFullYear() === currentYear;
+                
+                return (
+                  <TouchableOpacity
+                    key={item.key}
+                    disabled={!item.day}
+                    onPress={() => item.day && handleSelectDay(item.day)}
+                    style={[
+                      styles.dayCell,
+                      isSelected && { backgroundColor: colors.primary },
+                      !isSelected && isToday && { borderWidth: 1, borderColor: colors.primary }
+                    ]}
+                  >
+                    {item.day ? (
+                      <Typography 
+                        variant="body" 
+                        weight={isSelected || isToday ? 'bold' : 'medium'}
+                        style={{ color: isSelected ? '#FFFFFF' : colors.text }}
+                      >
+                        {item.day}
+                      </Typography>
+                    ) : null}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -856,5 +1354,171 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     maxHeight: 200,
     overflow: 'hidden',
+  },
+  controlCard: {
+    padding: 16,
+    marginBottom: 20,
+    borderRadius: 16,
+  },
+  controlRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  controlIconBg: {
+    padding: 8,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editBadge: {
+    backgroundColor: 'rgba(212, 175, 55, 0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  controlDivider: {
+    height: 1,
+    marginVertical: 12,
+    opacity: 0.5,
+  },
+  dateControlRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  arrowBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dateDisplayContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dateInputContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 12,
+  },
+  dateTextInput: {
+    flex: 1,
+    height: 36,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    fontSize: 14,
+    marginRight: 6,
+  },
+  checkBtn: {
+    padding: 6,
+  },
+  cancelBtn: {
+    padding: 6,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: 24,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    height: 46,
+    borderRadius: 23,
+  },
+  modalInput: {
+    flex: 1,
+    marginLeft: 10,
+    fontSize: 14,
+  },
+  quickLocItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+  },
+  detectLocationBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 12,
+    height: 44,
+    borderRadius: 22,
+  },
+  sunMoonStack: {
+    marginBottom: 20,
+  },
+  sunMoonFullCard: {
+    padding: 16,
+    marginBottom: 12,
+  },
+  cardHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  timeIconBg: {
+    padding: 6,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timeValueRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  timeValueBox: {
+    flex: 1,
+  },
+  calendarNavHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingHorizontal: 8,
+  },
+  navBtn: {
+    padding: 8,
+    borderRadius: 8,
+  },
+  weekdaysRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  weekdayCell: {
+    width: '14.28%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  daysGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  dayCell: {
+    width: '14.28%',
+    aspectRatio: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 20,
+    marginVertical: 2,
   },
 });

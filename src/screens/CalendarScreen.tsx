@@ -141,6 +141,7 @@ export const CalendarScreen = ({ navigation }: any) => {
       <AppHeader 
         title="Panchang Calendar" 
         subtitle={`${monthNames[selectedMonth]} ${selectedYear} • Vikram Samvat 2083`}
+        onBackPress={navigation?.canGoBack() ? () => navigation.goBack() : undefined}
         onMenuPress={() => navigation.navigate('Menu')}
       />
 

@@ -4,7 +4,7 @@ import { useTheme } from '../theme/ThemeContext';
 import { Typography } from '../components/Typography';
 import { PremiumCard } from '../components/PremiumCard';
 import { AppHeader } from '../components/AppHeader';
-import { Moon, Compass, Sun, Globe, Bell, MapPin, Sparkles, ChevronRight, HelpCircle, Shield, Info, Smartphone, Check, Heart, Grid, LogOut } from 'lucide-react-native';
+import { Moon, Compass, Sun, Globe, Bell, MapPin, Sparkles, ChevronRight, HelpCircle, Shield, Info, Smartphone, Check, Heart, Grid, LogOut, Flame, Calendar } from 'lucide-react-native';
 import { useAuth } from '../services/AuthContext';
 
 
@@ -27,6 +27,8 @@ export const MenuScreen = ({ navigation }: any) => {
         { icon: Grid, label: 'Divisional Kundali Charts', sub: 'Generate divisional D1 to D60 charts', route: 'KundaliChart' },
         { icon: Sparkles, label: 'Daily Horoscope', sub: 'Western daily, weekly & monthly predictions', route: 'DailyHoroscope' },
         { icon: Sparkles, label: 'Horoscope Predictions', sub: 'Personalised Vedic life interpretations', route: 'Horoscope' },
+        { icon: Flame, label: 'Hindu Festivals & Vrats', sub: 'Upcoming Hindu festivals & Muhurat dates', route: 'Festivals' },
+        { icon: Calendar, label: 'Interactive Almanac Calendar', sub: 'View daily tithi, auspicious muhurats & vrat grid', route: 'Calendar' },
         { icon: Compass, label: 'Vedic Numerology Analysis', sub: 'Calculates Name & Destiny numbers', route: 'Numerology' },
         { icon: Compass, label: 'Vastu Compass & Energy', sub: 'Harmonize your home directional energy' },
         { icon: Sun, label: 'Choghadiya & Hora Timings', sub: 'Day & night auspicious Muhurthas' },

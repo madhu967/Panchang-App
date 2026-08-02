@@ -4,7 +4,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { View, StyleSheet, Platform, Text, ActivityIndicator } from 'react-native';
 import { BlurView } from 'expo-blur';
-import { Home, Moon, Calendar as CalendarIcon, Flame, Menu, Heart, Sparkles, LogIn, User } from 'lucide-react-native';
+import { Home, Moon, Calendar as CalendarIcon, Flame, Menu, Heart, Sparkles, LogIn, User, Sun, Compass } from 'lucide-react-native';
 import { useAuth } from '../services/AuthContext';
 import { AuthScreen } from '../screens/AuthScreen';
 import { StatusScreen } from '../screens/StatusScreen';
@@ -213,25 +213,25 @@ const TabNavigator = () => {
         }}
       />
       <Tab.Screen 
-        name="Calendar" 
-        component={CalendarScreen} 
+        name="Numerology" 
+        component={NumerologyScreen} 
         options={{
-          tabBarLabel: 'Calendar',
+          tabBarLabel: 'Numerology',
           tabBarIcon: ({ color, focused }) => (
             <View style={[styles.iconWrapper, focused && { backgroundColor: colors.primary + '26' }]}>
-              <CalendarIcon color={color} size={22} />
+              <Compass color={color} size={22} />
             </View>
           )
         }}
       />
       <Tab.Screen 
-        name="Festivals" 
-        component={FestivalsScreen} 
+        name="DailyHoroscope" 
+        component={DailyHoroscopeScreen} 
         options={{
-          tabBarLabel: 'Festivals',
+          tabBarLabel: 'Daily',
           tabBarIcon: ({ color, focused }) => (
             <View style={[styles.iconWrapper, focused && { backgroundColor: colors.primary + '26' }]}>
-              <Flame color={color} size={22} />
+              <Sun color={color} size={22} />
             </View>
           )
         }}
@@ -256,12 +256,12 @@ export const AppNavigator = () => {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="Main" component={TabNavigator} />
-      <Stack.Screen name="DailyHoroscope" component={DailyHoroscopeScreen} />
-      <Stack.Screen name="Numerology" component={NumerologyScreen} />
       <Stack.Screen name="KundaliChart" component={KundaliChartScreen} />
       <Stack.Screen name="Menu" component={MenuScreen} />
       <Stack.Screen name="Profile" component={ProfileScreen} />
       <Stack.Screen name="UserManagement" component={UserManagementScreen} />
+      <Stack.Screen name="Festivals" component={FestivalsScreen} />
+      <Stack.Screen name="Calendar" component={CalendarScreen} />
     </Stack.Navigator>
   );
 };

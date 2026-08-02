@@ -13,14 +13,24 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeContext';
 import { Typography } from '../components/Typography';
 import { PremiumCard } from '../components/PremiumCard';
-import { ArrowLeft, Sparkles, Share2, Compass, Heart, Calendar } from 'lucide-react-native';
+import { ArrowLeft, Sparkles, Share2, Compass, Heart, Calendar, Flame, Droplet, Wind, Globe } from 'lucide-react-native';
 import { getHoroscope, ZODIAC_SIGNS, HoroscopeResponse, HoroscopeType } from '../services/freeHoroscopeApi';
 
 const { width } = Dimensions.get('window');
 
 export const DailyHoroscopeScreen = ({ navigation }: any) => {
   const insets = useSafeAreaInsets();
-  const { colors, isDark, toggleTheme } = useTheme();
+  const { colors, isDark } = useTheme();
+
+  const getElementIcon = (element: string, color: string, size = 12) => {
+    switch (element) {
+      case 'Fire': return <Flame color={color} size={size} />;
+      case 'Water': return <Droplet color={color} size={size} />;
+      case 'Earth': return <Globe color={color} size={size} />;
+      case 'Air': return <Wind color={color} size={size} />;
+      default: return <Sparkles color={color} size={size} />;
+    }
+  };
 
   // State
   const [selectedSign, setSelectedSign] = useState<string | null>(null);
@@ -105,19 +115,15 @@ export const DailyHoroscopeScreen = ({ navigation }: any) => {
         ]}
       >
         <View style={styles.headerContentRow}>
-          <TouchableOpacity 
-            style={[styles.backButton, { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.08)' }]} 
-            onPress={() => {
-              if (selectedSign) {
-                setSelectedSign(null);
-              } else {
-                navigation.goBack();
-              }
-            }}
-            activeOpacity={0.7}
-          >
-            <ArrowLeft color={textColor} size={22} />
-          </TouchableOpacity>
+          {selectedSign && (
+            <TouchableOpacity 
+              style={[styles.backButton, { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.08)' }]} 
+              onPress={() => setSelectedSign(null)}
+              activeOpacity={0.7}
+            >
+              <ArrowLeft color={textColor} size={22} />
+            </TouchableOpacity>
+          )}
 
           <View style={styles.headerTitleContainer}>
             <Typography 
@@ -157,32 +163,48 @@ export const DailyHoroscopeScreen = ({ navigation }: any) => {
           </View>
 
           <View style={styles.gridContainer}>
-            {ZODIAC_SIGNS.map((sign) => (
-              <TouchableOpacity
-                key={sign.id}
-                style={styles.gridItem}
-                activeOpacity={0.7}
-                onPress={() => setSelectedSign(sign.id)}
-              >
-                <PremiumCard style={styles.zodiacCard}>
-                  <View style={styles.zodiacCardHeader}>
-                    <Typography style={styles.zodiacEmoji}>{sign.emoji}</Typography>
-                    <View style={[styles.elementBadge, { backgroundColor: getElementColor(sign.element) + '22' }]}>
-                      <Typography variant="caption" style={{ color: getElementColor(sign.element), fontSize: 10, fontWeight: 'bold' }}>
-                        {sign.element}
+            {ZODIAC_SIGNS.map((sign) => {
+              const elementColor = getElementColor(sign.element);
+              return (
+                <TouchableOpacity
+                  key={sign.id}
+                  style={styles.gridItem}
+                  activeOpacity={0.75}
+                  onPress={() => setSelectedSign(sign.id)}
+                >
+                  <PremiumCard 
+                    style={[
+                      styles.zodiacCard, 
+                      { 
+                        borderTopWidth: 4, 
+                        borderTopColor: elementColor,
+                        backgroundColor: isDark ? 'rgba(30, 30, 38, 0.95)' : '#FFFFFF',
+                        borderColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'
+                      }
+                    ]}
+                  >
+                    <View style={styles.zodiacCardHeader}>
+                      <Typography style={styles.zodiacEmoji}>{sign.emoji}</Typography>
+                      <View style={[styles.elementBadge, { backgroundColor: elementColor + '15', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, paddingVertical: 2 }]}>
+                        {getElementIcon(sign.element, elementColor, 10)}
+                        <Typography variant="caption" style={{ color: elementColor, fontSize: 9, fontWeight: 'bold', marginLeft: 4 }}>
+                          {sign.element}
+                        </Typography>
+                      </View>
+                    </View>
+                    
+                    <View style={{ marginTop: 10 }}>
+                      <Typography variant="body" weight="bold" style={{ fontSize: 15 }}>
+                        {sign.name}
+                      </Typography>
+                      <Typography variant="caption" color="muted" style={{ fontSize: 10, marginTop: 2 }}>
+                        {sign.dateRange}
                       </Typography>
                     </View>
-                  </View>
-                  
-                  <Typography variant="body" weight="bold" style={{ marginTop: 8 }}>
-                    {sign.name}
-                  </Typography>
-                  <Typography variant="caption" color="muted" style={{ fontSize: 11, marginTop: 4 }}>
-                    {sign.dateRange}
-                  </Typography>
-                </PremiumCard>
-              </TouchableOpacity>
-            ))}
+                  </PremiumCard>
+                </TouchableOpacity>
+              );
+            })}
           </View>
           <View style={{ height: 100 }} />
         </ScrollView>
@@ -198,19 +220,23 @@ export const DailyHoroscopeScreen = ({ navigation }: any) => {
             >
               {ZODIAC_SIGNS.map((sign) => {
                 const isCurrent = sign.id === selectedSign;
+                const elementColor = getElementColor(sign.element);
                 return (
                   <TouchableOpacity
                     key={sign.id}
                     style={[
                       styles.quickSignChip,
-                      { borderColor: isCurrent ? colors.primary : colors.border },
-                      isCurrent && { backgroundColor: colors.primary + '15' }
+                      { 
+                        borderColor: isCurrent ? elementColor : colors.border,
+                        backgroundColor: isCurrent ? elementColor + '15' : 'transparent',
+                        borderWidth: isCurrent ? 2 : 1,
+                      }
                     ]}
                     onPress={() => setSelectedSign(sign.id)}
-                    activeOpacity={0.7}
+                    activeOpacity={0.75}
                   >
-                    <Typography style={{ fontSize: 18, marginRight: 6 }}>{sign.emoji}</Typography>
-                    <Typography variant="caption" weight={isCurrent ? "bold" : "medium"}>
+                    <Typography style={{ fontSize: 16, marginRight: 4 }}>{sign.emoji}</Typography>
+                    <Typography variant="caption" weight={isCurrent ? "bold" : "semibold"} style={{ color: isCurrent ? elementColor : colors.textSecondary }}>
                       {sign.name}
                     </Typography>
                   </TouchableOpacity>
@@ -262,13 +288,31 @@ export const DailyHoroscopeScreen = ({ navigation }: any) => {
                 </Typography>
               </PremiumCard>
             ) : (
-              <PremiumCard style={styles.readingCard}>
+              <PremiumCard 
+                style={[
+                  styles.readingCard, 
+                  { 
+                    borderLeftWidth: 4, 
+                    borderLeftColor: activeSignDetails ? getElementColor(activeSignDetails.element) : colors.primary 
+                  }
+                ]}
+              >
                 <View style={styles.readingHeader}>
-                  <View style={styles.iconCircle}>
-                    <Sparkles color={colors.primary} size={24} />
+                  <View style={[
+                    styles.iconCircle, 
+                    { 
+                      backgroundColor: activeSignDetails 
+                        ? getElementColor(activeSignDetails.element) + '15' 
+                        : 'rgba(212, 175, 55, 0.15)' 
+                    }
+                  ]}>
+                    {activeSignDetails 
+                      ? getElementIcon(activeSignDetails.element, getElementColor(activeSignDetails.element), 20)
+                      : <Sparkles color={colors.primary} size={20} />
+                    }
                   </View>
                   <View style={{ marginLeft: 14 }}>
-                    <Typography variant="subtitle" weight="bold">
+                    <Typography variant="subtitle" weight="bold" style={{ fontSize: 16 }}>
                       {activeSignDetails?.emoji} {activeSignDetails?.name} Predictions
                     </Typography>
                     <Typography variant="caption" color="muted">

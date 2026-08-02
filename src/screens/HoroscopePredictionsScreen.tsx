@@ -387,8 +387,8 @@ export const HoroscopePredictionsScreen = ({ navigation }: any) => {
   const [lat, setLat] = useState(16.561);
   const [lng, setLng] = useState(81.52);
 
-  // Selected Filter tag (Exactly one tag at a time)
-  const [selectedTag, setSelectedTag] = useState<string>('Reputation');
+  // Selected Filter tag (All by default)
+  const [selectedTag, setSelectedTag] = useState<string>('All');
 
   // Sort by weight toggle state
   const [sortByWeight, setSortByWeight] = useState(true);
@@ -396,6 +396,7 @@ export const HoroscopePredictionsScreen = ({ navigation }: any) => {
   // Custom picker modals visibility
   const [datePickerVisible, setDatePickerVisible] = useState(false);
   const [timePickerVisible, setTimePickerVisible] = useState(false);
+  const [showDropdownModal, setShowDropdownModal] = useState(false);
 
   // Modal location search states
   const [locationModalVisible, setLocationModalVisible] = useState(false);
@@ -447,6 +448,49 @@ export const HoroscopePredictionsScreen = ({ navigation }: any) => {
     setSelectedTag(tag);
   };
 
+  const getTakeaway = (desc: string): string => {
+    if (!desc) return '';
+    const sentences = desc.split(/(?<=[.!?])\s+/);
+    return sentences[0] || '';
+  };
+  
+  const getRemainingDesc = (desc: string): string => {
+    if (!desc) return '';
+    const sentences = desc.split(/(?<=[.!?])\s+/);
+    if (sentences.length <= 1) return '';
+    return sentences.slice(1).join(' ');
+  };
+
+  const renderNaturePill = (nature: string) => {
+    if (!nature) return null;
+    const cleanNature = String(nature).trim().toLowerCase();
+    
+    let label = 'Neutral';
+    let color = '#7F8C8D';
+    let bgColor = 'rgba(127, 140, 141, 0.08)';
+    let borderColor = 'rgba(127, 140, 141, 0.3)';
+    
+    if (cleanNature === 'good' || cleanNature === 'positive') {
+      label = 'Auspicious';
+      color = '#10B981';
+      bgColor = 'rgba(16, 185, 129, 0.08)';
+      borderColor = 'rgba(16, 185, 129, 0.3)';
+    } else if (cleanNature === 'bad' || cleanNature === 'negative') {
+      label = 'Challenging';
+      color = '#EF4444';
+      bgColor = 'rgba(239, 68, 68, 0.08)';
+      borderColor = 'rgba(239, 68, 68, 0.3)';
+    }
+    
+    return (
+      <View style={[styles.naturePill, { backgroundColor: bgColor, borderColor: borderColor }]}>
+        <Typography variant="caption" weight="bold" style={{ color: color, fontSize: 10 }}>
+          {label}
+        </Typography>
+      </View>
+    );
+  };
+
   // Generate Horoscope prediction list
   const handleGenerateHoroscope = async () => {
     setErrorMsg(null);
@@ -454,28 +498,62 @@ export const HoroscopePredictionsScreen = ({ navigation }: any) => {
 
     const stdTimeStr = `${time} ${date} +05:30`;
 
-    const requestPayload: HoroscopePredictionsRequest = {
-      BirthTime: {
-        StdTime: stdTimeStr,
-        Location: {
-          Name: locationName,
-          Latitude: lat,
-          Longitude: lng
+    // Gather all unique tags from CATEGORIES_DATA
+    const allTags = CATEGORIES_DATA.reduce((acc, cat) => {
+      cat.tags.forEach(tag => {
+        if (!acc.includes(tag)) {
+          acc.push(tag);
         }
-      },
-      FilterTags: selectedTag,
-      SortByWeight: sortByWeight ? 'True' : 'False',
-      Ayanamsa: 'RAMAN'
-    };
+      });
+      return acc;
+    }, [] as string[]);
+
+    const tagsToFetch = selectedTag === 'All' ? allTags : [selectedTag];
 
     try {
-      const response = await getHoroscopePredictions(requestPayload);
-      const predictions = response.Payload || response;
-      if (Array.isArray(predictions)) {
-        setHoroscopeData(predictions);
-        setScreenMode('result');
-      } else if (response?.Payload?.HoroscopePredictions && Array.isArray(response.Payload.HoroscopePredictions)) {
-        setHoroscopeData(response.Payload.HoroscopePredictions);
+      const promises = tagsToFetch.map(async (tag) => {
+        try {
+          const requestPayload: HoroscopePredictionsRequest = {
+            BirthTime: {
+              StdTime: stdTimeStr,
+              Location: {
+                Name: locationName,
+                Latitude: lat,
+                Longitude: lng
+              }
+            },
+            FilterTags: tag,
+            SortByWeight: sortByWeight ? 'True' : 'False',
+            Ayanamsa: 'RAMAN'
+          };
+          const response = await getHoroscopePredictions(requestPayload);
+          const predictions = response.Payload || response;
+          if (Array.isArray(predictions)) {
+            return predictions;
+          } else if (response?.Payload?.HoroscopePredictions && Array.isArray(response.Payload.HoroscopePredictions)) {
+            return response.Payload.HoroscopePredictions;
+          }
+        } catch (err) {
+          console.warn(`Failed to fetch horoscope predictions for tag "${tag}":`, err);
+        }
+        return [];
+      });
+
+      const results = await Promise.all(promises);
+      const allPredictions = results.flat();
+
+      // Deduplicate predictions by Name
+      const uniquePredictions: any[] = [];
+      const seenNames = new Set<string>();
+      for (const pred of allPredictions) {
+        if (pred && pred.Name && !seenNames.has(pred.Name)) {
+          seenNames.add(pred.Name);
+          uniquePredictions.push(pred);
+        }
+      }
+
+      if (uniquePredictions.length > 0) {
+        setHoroscopeData(uniquePredictions);
         setScreenMode('result');
       } else {
         setErrorMsg('Failed to parse horoscope predictions. Please try a different birth time.');
@@ -593,55 +671,34 @@ export const HoroscopePredictionsScreen = ({ navigation }: any) => {
                 </View>
               </PremiumCard>
 
-              {/* FILTER TAGS / CATEGORIES (SINGLE SELECT) */}
+              {/* FILTER TAGS / CATEGORIES DROPDOWN (Senior Developer Design) */}
               <PremiumCard style={styles.formCard}>
                 <View style={styles.sectionHeaderRow}>
                   <Layers color={colors.primary} size={18} />
                   <Typography variant="subtitle" weight="bold" style={{ marginLeft: 10, flex: 1 }}>
-                    Filter Category Tag (Select One)
+                    Filter Category
                   </Typography>
                 </View>
 
-                <Typography variant="caption" color="muted" style={{ marginBottom: 14 }}>
-                  Select exactly one filter tag to calculate horoscope predictions:
+                <Typography variant="caption" color="muted" style={{ marginBottom: 12 }}>
+                  Filter predictions by specific life categories, or view all predictions.
                 </Typography>
 
-                {CATEGORIES_DATA.map((catItem, idx) => {
-                  return (
-                    <View key={idx} style={[styles.catRow, idx !== CATEGORIES_DATA.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.border + '20' }]}>
-                      {/* Category Header */}
-                      <View style={styles.catHeader}>
-                        <Typography variant="body" weight="bold" color="primary">{catItem.category}</Typography>
-                      </View>
-
-                      {/* Tag Capsules */}
-                      <View style={styles.tagsContainer}>
-                        {catItem.tags.map((tag) => {
-                          const isSelected = selectedTag === tag;
-                          return (
-                            <TouchableOpacity
-                              key={tag}
-                              onPress={() => handleSelectTag(tag)}
-                              activeOpacity={0.7}
-                              style={[
-                                styles.tagChip,
-                                {
-                                  borderColor: isSelected ? colors.primary : colors.border,
-                                  backgroundColor: isSelected ? colors.primary + '18' : 'transparent'
-                                }
-                              ]}
-                            >
-                              <Typography variant="caption" weight={isSelected ? "bold" : "semibold"} style={{ color: isSelected ? colors.primary : colors.textSecondary, fontSize: 11 }}>
-                                {tag}
-                              </Typography>
-                              {isSelected && <Check color={colors.primary} size={11} style={{ marginLeft: 4 }} />}
-                            </TouchableOpacity>
-                          );
-                        })}
-                      </View>
-                    </View>
-                  );
-                })}
+                {/* Dropdown Selector Button */}
+                <TouchableOpacity 
+                  style={[styles.dropdownSelector, { borderColor: colors.border }]}
+                  onPress={() => setShowDropdownModal(true)}
+                  activeOpacity={0.7}
+                >
+                  <Sliders color={colors.primary} size={18} style={{ marginRight: 10 }} />
+                  <View style={{ flex: 1 }}>
+                    <Typography variant="caption" color="muted" style={{ fontSize: 9 }}>SELECTED FILTER</Typography>
+                    <Typography variant="body" weight="bold">
+                      {selectedTag === 'All' ? 'All Categories (No Filter)' : selectedTag}
+                    </Typography>
+                  </View>
+                  <ChevronDown color={colors.textSecondary} size={18} />
+                </TouchableOpacity>
               </PremiumCard>
 
               {/* SORT BY WEIGHT TOGGLE */}
@@ -760,7 +817,7 @@ export const HoroscopePredictionsScreen = ({ navigation }: any) => {
                         style={styles.predictionTrigger}
                       >
                         <View style={{ flex: 1, paddingRight: 8 }}>
-                          <Typography variant="body" weight="bold">{item.Name}</Typography>
+                           <Typography variant="body" weight="bold">{item.Name}</Typography>
                           
                           {/* Stars / Weight visual rating */}
                           <View style={styles.weightRow}>
@@ -771,7 +828,10 @@ export const HoroscopePredictionsScreen = ({ navigation }: any) => {
                           </View>
                         </View>
 
-                        <ChevronDown color={colors.textSecondary} size={18} style={{ transform: [{ rotate: isExpanded ? '180deg' : '0deg' }] }} />
+                        <View style={styles.predictionRightRow}>
+                          {renderNaturePill(item.Nature)}
+                          <ChevronDown color={colors.textSecondary} size={18} style={{ transform: [{ rotate: isExpanded ? '180deg' : '0deg' }] }} />
+                        </View>
                       </TouchableOpacity>
 
                       {isExpanded && (
@@ -807,14 +867,33 @@ export const HoroscopePredictionsScreen = ({ navigation }: any) => {
                           )}
 
                           {/* Description box */}
-                          <View style={[styles.verdictDetailBox, { backgroundColor: colors.primary + '06', borderColor: colors.primary + '20' }]}>
+                          <View style={[styles.verdictDetailBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                             <View style={styles.verdictHeaderRow}>
                               <BookOpen color={colors.primary} size={14} />
-                              <Typography variant="caption" weight="bold" color="primary" style={{ marginLeft: 6 }}>Astrological Analysis</Typography>
+                              <Typography variant="caption" weight="bold" color="primary" style={{ marginLeft: 6 }}>
+                                Astrological Guidance
+                              </Typography>
                             </View>
-                            <Typography variant="body" style={{ marginTop: 6, fontSize: 13, lineHeight: 20 }}>
-                              {item.Description}
-                            </Typography>
+                            
+                            {/* Highlighted Takeaway */}
+                            {getTakeaway(item.Description) ? (
+                              <View style={[styles.takeawayHighlight, { borderLeftColor: colors.primary, backgroundColor: isDark ? 'rgba(212,175,55,0.06)' : '#FFFBEB' }]}>
+                                <Typography variant="body" weight="semibold" style={{ fontSize: 13, lineHeight: 18, color: isDark ? '#D4AF37' : '#B45309' }}>
+                                  "{getTakeaway(item.Description)}"
+                                </Typography>
+                              </View>
+                            ) : null}
+
+                            {/* Remaining description */}
+                            {getRemainingDesc(item.Description) ? (
+                              <Typography variant="body" style={{ marginTop: 8, fontSize: 13, lineHeight: 19, color: colors.textSecondary }}>
+                                {getRemainingDesc(item.Description)}
+                              </Typography>
+                            ) : !getTakeaway(item.Description) ? (
+                              <Typography variant="body" style={{ marginTop: 8, fontSize: 13, lineHeight: 19, color: colors.textSecondary }}>
+                                {item.Description}
+                              </Typography>
+                            ) : null}
                           </View>
 
                           {/* Tags row */}
@@ -857,6 +936,74 @@ export const HoroscopePredictionsScreen = ({ navigation }: any) => {
         value={time}
         onSelect={(timeStr: string) => setTime(timeStr)}
       />
+
+      {/* Dropdown Filter Category Modal */}
+      <Modal visible={showDropdownModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 }]}>
+            <View style={styles.modalHeader}>
+              <Typography variant="subtitle" weight="bold">Select Filter Category</Typography>
+              <TouchableOpacity onPress={() => setShowDropdownModal(false)}>
+                <X color={colors.text} size={24} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ maxHeight: 380 }} showsVerticalScrollIndicator={false}>
+              {/* Option 'All' */}
+              <TouchableOpacity
+                onPress={() => {
+                  setSelectedTag('All');
+                  setShowDropdownModal(false);
+                }}
+                style={[
+                  styles.dropdownItem,
+                  selectedTag === 'All' && { backgroundColor: colors.primary + '12' },
+                  { borderBottomColor: colors.border, borderBottomWidth: 1 }
+                ]}
+              >
+                <Sparkles color={colors.primary} size={16} />
+                <Typography variant="body" weight={selectedTag === 'All' ? 'bold' : 'medium'} style={{ marginLeft: 10, flex: 1 }}>
+                  All Categories (Show All Predictions)
+                </Typography>
+                {selectedTag === 'All' && <Check color={colors.primary} size={18} />}
+              </TouchableOpacity>
+
+              {/* Categorized Options */}
+              {CATEGORIES_DATA.map((catItem) => (
+                <View key={catItem.category} style={{ marginTop: 12 }}>
+                  {/* Section Label */}
+                  <Typography variant="caption" color="primary" weight="bold" style={{ marginLeft: 12, marginBottom: 6, letterSpacing: 1 }}>
+                    {catItem.category.toUpperCase()}
+                  </Typography>
+                  
+                  {catItem.tags.map((tag) => {
+                    const isSelected = selectedTag === tag;
+                    return (
+                      <TouchableOpacity
+                        key={tag}
+                        onPress={() => {
+                          setSelectedTag(tag);
+                          setShowDropdownModal(false);
+                        }}
+                        style={[
+                          styles.dropdownItem,
+                          isSelected && { backgroundColor: colors.primary + '12' }
+                        ]}
+                      >
+                        <View style={{ width: 16 }} />
+                        <Typography variant="body" weight={isSelected ? 'bold' : 'regular'} style={{ flex: 1, color: colors.text }}>
+                          {tag}
+                        </Typography>
+                        {isSelected && <Check color={colors.primary} size={18} />}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
 
       {/* LOCATION PICKER SEARCH MODAL */}
       <Modal visible={locationModalVisible} transparent animationType="slide">
@@ -1210,5 +1357,29 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 2,
+  },
+  dropdownSelector: {
+    height: 52,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(150,150,150,0.02)',
+  },
+  dropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    marginVertical: 2,
+  },
+  takeawayHighlight: {
+    borderLeftWidth: 3,
+    padding: 10,
+    borderRadius: 6,
+    marginTop: 8,
+    marginBottom: 4,
   }
 });

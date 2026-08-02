@@ -44,6 +44,7 @@ export const FestivalsScreen = ({ navigation }: any) => {
       <AppHeader 
         title="Festivals & Vrats" 
         subtitle="Sacred Occasions & Divine Celebrations"
+        onBackPress={navigation?.canGoBack() ? () => navigation.goBack() : undefined}
         onMenuPress={() => navigation.navigate('Menu')}
       />
 
